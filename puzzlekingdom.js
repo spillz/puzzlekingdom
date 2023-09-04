@@ -1,5 +1,33 @@
 import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math} from './lib/eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
 
+/*
+New gameplay idea (replaces the current complicated and somewhat boring adjacency scoring fest)
+Game played in 5-10 rounds depending on level. Each round:
+1. Start of round phase: Draw an event and show to player. It resolves at round end
+2. Building phase: Draw 5 building tiles face up. Play the 5 tiles to build the buildings on the terrain. 
+3. Activation phase: Spend coin (Tradeship), spend force (stronghold), govern (castle), forest clearing (farm), training (abbey)
+4. Resolve event phase
+Player is evaluated against end game objectives, which vary by mission
+
+Resources:
+Food: Need one food for every worker.
+Workers: Each building uses a certain number of workers. Surplus workers become military if a stronghold is present.
+Force: Number of suplus workers
+Coin: Used to supply food and workers, and end game points.
+
+No activations when there are food or worker shortages? Or just force spending of money, including dipping into negative balance
+
+Building functions:
+Farm: place on pasture/forest; provides 1 food/level for its space and each empty adjacent pasture space.
+Village: place on pasture/mountain/forest; provides 1 worker for each adjacent building except other villages, which reduce worker production by 1.
+Mine: provides 1 coin for each adjacent space.
+Stronghold: provides military strength for each surplus worker.
+Castle: provides 1 governance action at end of current round (or immediately?).
+Abbey: grants +1 effectiveness to adjacent farm, village and mine. When placed, enhances 1 building at end of current round.
+Tradeship: placed on water tile -- grants access to all connected land. During activation, spend coin for food/workers
+
+*/
+
 
 class Level {
     constructor() {
@@ -71,6 +99,7 @@ class Tile extends ImageWidget {
     score = 0;
     constructor(player = null) {
         super();
+        console.log('Tile instance', this.code);
         this.wLabel = null;
         this.player = player;
     }
@@ -85,8 +114,8 @@ class Tile extends ImageWidget {
     }
     
     on_touch_down(event, touch) {
-        if(this.collide(touch.rect)) {
-            if (this.parent.on_touch_down_tile(this, touch)) {
+        if(this.collideRadius(touch.rect, this.w*0.43)) {
+            if (this.parent.onTouchDownTile(this, touch)) {
                 return true;
             }
         }
@@ -111,7 +140,7 @@ class Tile extends ImageWidget {
 
 class Castle extends Tile {
     constructor(player=null) {
-        super(player);        
+        super(player);
         this.code = 'C';
         this.scoreTiles = {'C': -1, 'V': 1, 'S': 1, 'M': -1, 'T': 1, 'A': 1, 'F': -1, '': 0};
         this.scoreTerrain = {'p': 1, 'f': 1, 'm': 0, 'w': null};
@@ -247,21 +276,26 @@ class TerrainHex extends ImageWidget {
     hexLen = 0.0;
     hexPosX = 0.0;
     hexPosY = 0.0;
-    get hexPos() { return [this.hexPosX, this.hexPosY]; }
-    set hexPos(pos) { [this.hexPosX, this.hexPosY] = pos; }
     texture = {};
 
     constructor(props=null) {
         super();
         this.updateProperties(props);
         this.tile = null;
-        // this.src = this.board.terrainImages[this.code];
         this.allowStretch = true;
     }
 
+    get hexPos() { 
+        return [this.hexPosX, this.hexPosY]; 
+    }
+
+    set hexPos(pos) { 
+        [this.hexPosX, this.hexPosY] = pos; 
+    }
+
     on_touch_down(event, touch) {
-        if(this.collide(touch.rect)) { //TODO: Scale it
-            this.parent.on_touch_down_terrain(this, touch);
+        if(this.collideRadius(touch.rect, this.w*0.43)) { //TODO: Scale it
+            this.parent.onTouchDownTerrain(this, touch);
         }
     }
 }
@@ -597,9 +631,6 @@ class Board extends Widget {
         return value;
     }
 
-    update_terrain_and_neighbors(terrain) {
-    }
-
     scoreTile(terrHex) {
         const tile = terrHex.tile;
         tile.score = tile.scoreTerrain[terrHex.code];
@@ -665,7 +696,7 @@ class Board extends Widget {
         return false;
     }
     
-    on_touch_down_terrain(terrain, touch) {
+    onTouchDownTerrain(terrain, touch) {
         if (this.gameOver) return true;
         if (this.selectedTile === null) return true;
         if (this.selectedTile.scoreTerrain[terrain.code] === null) return true;
@@ -684,7 +715,7 @@ class Board extends Widget {
         return this.placeTile(terrain);
     }
     
-    on_touch_down_tile(tile, touch) {
+    onTouchDownTile(tile, touch) {
         if (this.gameOver) return true;
         if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return true;
         const p = this.players[this.activePlayer];
@@ -793,8 +824,7 @@ class LevelHex extends ImageWidget {
     }
 
     on_touch_up(touch) {
-        if (this.collide(touch.rect)) {
-//        if (Math.pow(touch.pos[0] - this.center_x, 2) + Math.pow(touch.pos[1] - this.center_y, 2) < Math.pow(this.size[0] / 2, 2)) {
+        if (this.collideRadius(touch.rect, this.w*0.43)) {
             this.parent.on_touch_up_level(this, touch);
         }
     }
