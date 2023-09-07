@@ -1,4 +1,7 @@
+//@ts-check
+
 import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math} from './lib/eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
+import { colorString } from './lib/eskv/lib/modules/math.js';
 
 /*
 New gameplay idea (replaces the current complicated and somewhat boring adjacency scoring fest)
@@ -33,6 +36,9 @@ class Level {
     constructor() {
         this.levelSeed = null;
         this.tileSet = 'CCVVVVVVVVVAAAAAFFFFFSS';
+        this.map = ``;
+        this.start = [4,4];
+        this.startTile = 'C';
     }
 }
 
@@ -94,11 +100,11 @@ class Tile extends ImageWidget {
     selected = false;
     selectablePos = -1;
     hexPos = [-1, -1];
-    tileColor = [];
-    textColor = [];
+    tileColor = 'blue';
+    textColor = 'white';
     score = 0;
     constructor(player = null) {
-        super();
+        super({});
         console.log('Tile instance', this.code);
         this.wLabel = null;
         this.player = player;
@@ -115,7 +121,7 @@ class Tile extends ImageWidget {
     
     on_touch_down(event, touch) {
         if(this.collideRadius(touch.rect, this.w*0.43)) {
-            if (this.parent.onTouchDownTile(this, touch)) {
+            if (this.parent instanceof GameScreen && this.parent.onTouchDownTile(this, touch)) {
                 return true;
             }
         }
@@ -123,14 +129,17 @@ class Tile extends ImageWidget {
     }
     
     on_selected(event, value) {
+        let parent = this.parent;
+        if(!(parent instanceof GameScreen)) return;
+        let board = parent.board;
         if (value) {
             let a = new WidgetAnimation();
-            a.add({x:this.parent.selectPos[0], y:this.parent.selectPos[1]}, 100);
+            a.add({x:parent.selectPos[0], y:parent.selectPos[1]}, 100);
             a.start(this);
         } else {
             let x = this.selectablePos;
-            let pos = [0 * (this.parent.hexSide * 2 + 0.01 * this.parent.w), 
-                this.parent.h - (1 + x) * (this.parent.hexSide * 2 + 0.01 * this.parent.w)];
+            let pos = [0 * (parent.board.hexSide * 2 + 0.01 * parent.w), 
+                board.h - (1 + x) * (board.hexSide * 2 + 0.01 * board.w)];
             let a = new WidgetAnimation();
             a.add({x:pos[0], y:pos[1]}, 100);
             a.start(this);
@@ -192,7 +201,7 @@ class Tradeship extends Tile {
         this.code = 'T';
         this.scoreTiles = {'C': 1, 'V': 1, 'S': -1, 'M': 1, 'T': -1, 'A': 1, 'F': 1, '': 0};
         this.scoreTerrain = {'p': null, 'f': null, 'm': null, 'w': 2};
-        this.tileColor = [0.4, 0.2, 0.2, 1.0];
+        this.tileColor = colorString([0.4, 0.2, 0.2, 1.0]);
         this.textColor = 'white';
         this.src = terrainImages['T'];
     }
@@ -204,7 +213,7 @@ class Abbey extends Tile {
         this.code = 'A';
         this.scoreTiles = {'C': -1, 'V': 1, 'S': -1, 'M': -1, 'T': 1, 'A': -1, 'F': 1, '': 0};
         this.scoreTerrain = {'p': 1, 'f': 1, 'm': 1, 'w': null};
-        this.tileColor = [0.7, 0.4, 0.4, 1.0];
+        this.tileColor = colorString([0.7, 0.4, 0.4, 1.0]);
         this.textColor = 'white';
         this.src = terrainImages['A'];
     }
@@ -216,7 +225,7 @@ class Farm extends Tile {
         this.code = 'F';
         this.scoreTiles = {'C': -1, 'V': 1, 'S': -1, 'M': -1, 'T': 1, 'A': 1, 'F': -1, '': 0.5};
         this.scoreTerrain = {'p': 2, 'f': 1, 'm': null, 'w': null};
-        this.tileColor = [0.2, 0.5, 0.2, 1.0];
+        this.tileColor = colorString([0.2, 0.5, 0.2, 1.0]);
         this.textColor = 'white';
         this.src = terrainImages['F'];
     }
@@ -279,8 +288,10 @@ class TerrainHex extends ImageWidget {
     texture = {};
 
     constructor(props=null) {
-        super();
-        this.updateProperties(props);
+        super({});
+        if(props!==null) {
+            this.updateProperties(props);
+        }
         this.tile = null;
         this.allowStretch = true;
     }
@@ -295,8 +306,13 @@ class TerrainHex extends ImageWidget {
 
     on_touch_down(event, touch) {
         if(this.collideRadius(touch.rect, this.w*0.43)) { //TODO: Scale it
-            this.parent.onTouchDownTerrain(this, touch);
+            let gameScreen = this.parent?.parent;
+            if(gameScreen instanceof GameScreen) {
+                gameScreen.onTouchDownTerrain(this, touch);
+                return true;    
+            }
         }
+        return false;
     }
 }
 
@@ -339,35 +355,231 @@ const terrainClass = {
     'w': Water
 };
 
-class ScoreBoard extends BoxLayout {
+// class ScoreBoard extends BoxLayout {
 
-}
+// }
 
 class Board extends Widget {
+    constructor(props) {
+        super(props);
+        this.boardHexCount = this.boardHexCount??null;
+        this.boardWidth = this.boardWidth??null;
+        this.boardHeight = this.boardHeight??null;
+        this.hexWidth = this.hexWidth??null;
+        this.hexSide = this.hexSide??null;
+        this.hexHeight = this.hexHeight??null;
+        this.bgColor = this.bgColor??'blue'; //'Ocean Blue';
+        this.terrain = this.terrain??null;
+    }
+
+    clearTerrain() {
+        if (this.terrain !== null) {
+            for (let hp in this.terrain) {
+                this.removeChild(this.terrain[hp]);
+            }
+            this.terrain = null;
+        }
+    }
+
+    makeTerrain(level) {
+        this.terrain = new TerrainMap(level, this.boardHexCount)
+        for(let thex of this.terrain.iter()) {
+            this.addChild(thex);
+        }
+    }
+
+    pixelPos(hexPos) {
+        return [
+            this.center_x + this.hexSide * 1.5 * (hexPos[0] - Math.floor(this.boardHexCount / 2)),
+            this.center_y + this.hexHeight * (hexPos[1] - Math.floor(this.boardHexCount / 2) + Math.abs(hexPos[0] - Math.floor(this.boardHexCount / 2)) / 2.0)
+        ];
+    }
+    
+    hexPos(pixelPos) {
+        const hpos = Math.round((pixelPos[0] - this.center_x) / (this.hexSide * 1.5) + Math.floor(this.boardHexCount / 2));
+        const vpos = Math.round((pixelPos[1] - this.center_y) / this.hexHeight + Math.floor(this.boardHexCount / 2) - Math.abs(hpos - Math.floor(this.boardHexCount / 2)) / 2);
+        if (0 <= hpos && hpos < this.boardHexCount && 0 <= vpos && vpos < this.boardHexCount) {
+            return [hpos, vpos];
+        } else {
+            return null;
+        }
+    }
+    
+    *neighborIter(hexPos) {
+        const yOffsetLeft = hexPos[0] <= Math.floor(this.boardHexCount / 2)?1:0;
+        const yOffsetRight = hexPos[0] >= Math.floor(this.boardHexCount / 2)?1:0;
+        const offsets = [
+            [0, -1],
+            [0, +1],
+            [-1, -yOffsetLeft],
+            [-1, +1 - yOffsetLeft],
+            [+1, -yOffsetRight],
+            [+1, +1 - yOffsetRight]
+        ];
+    
+        for (let offset of offsets) {
+            const x = hexPos[0] + offset[0];
+            const y = hexPos[1] + offset[1];
+            if (this.terrain.at(x,y)) {
+                yield this.terrain.at(x,y);
+            }
+        }
+    }
+    
+    getNeighborCount(hexPos) {
+        let value = 0;
+        for (let t of this.neighborIter(hexPos)) {
+            if (t.tile !== null) {
+                value += 1;
+            }
+        }
+        return value;
+    }    
+
+    layoutChildren() {
+        this.hexSide = Math.min(
+            this.w / (1.5 * this.boardHexCount + 1),
+            0.95 * this.h / (this.boardHexCount * Math.sqrt(3))
+        );
+        this.hexWidth = this.hexSide * 2;
+        this.hexHeight = this.hexSide * Math.sqrt(3);
+        this.boardHeight = this.hexHeight * this.boardHexCount;
+        this.boardWidth = this.hexSide * (1.5 * this.boardHexCount + 1);
+    
+        if (this.terrain !== null) {
+            for (let x = 0; x < this.boardHexCount; x++) {
+                let yHeight = this.boardHexCount - Math.abs(Math.floor((this.boardHexCount - 1) / 2) - x);
+                for (let y = 0; y < yHeight; y++) {
+                    let center = this.pixelPos([x, y]);
+                    let thex = this.terrain.at(x, y)
+                    thex.w = this.hexWidth;
+                    thex.h = this.hexWidth;
+                    thex.center_x = center[0];
+                    thex.center_y = center[1];
+                    thex.layoutChildren();
+                }
+            }
+        }
+    }
+}
+
+class GameScreen extends Widget {
     constructor() {
         super();
-        this.boardHexCount = null;
-        this.boardWidth = null;
-        this.boardHeight = null;
-        this.hexWidth = null;
-        this.hexSide = null;
-        this.hexHeight = null;
-        this.bgColor = 'blue'; //'Ocean Blue';
-
-        this.terrain = null;
+        this.board = new Board({hints:{x:0,y:0,w:1,h:1}});
+        this.addChild(this.board);
+        /**@type {Level|null} */
+        this.level = null;
         this.tiles = [];
         this.selectableTiles = [];
         this.tileStack = [];
         this.selectedTile = null;
         this.activePlayer = 0;
         this.players = [];
-        this.scoreboard = new ScoreBoard({align:'right', hints:{right:0.99, top:0.01, w:1, h:0.05}});
+        this.selectPos = [0,0];
+        this.scoreboard = new BoxLayout({align:'right', hints:{right:0.99, y:0.01, w:1, h:0.05}});
         this.addChild(this.scoreboard);
         this.gameOver = false;
         this.wStateLabel = new Label({text: '', color: 'white', align: 'right', hints: {right: 0.99, bottom: 0.99, w:1, h:0.05}});
         this.addChild(this.wStateLabel);
     }
+    /**
+     * @param {TerrainHex|null} terrain 
+     */
+    updateScores(terrain = null) {
+        if (terrain !== null) {
+            this.scoreTile(terrain);
+            for (let terr of this.board.neighborIter(terrain.hexPos)) {
+                if (terr.tile !== null) {
+                    this.scoreTile(terr);
+                }
+            }
+        }
+        for (let p of this.players) {
+            let score = 0;
+            for (let pt of p.placedTiles) {
+                score += pt.score;
+            }
+            p.scoreMarker.score = score;
+        }
+    }
+    
+    placeTile(terrain, serverCheck = true) {
+        if (!this.gameOver && this.selectedTile !== null) {
+            const hexPos = terrain.hexPos;
+            if (this.board.terrain.at(...hexPos).tile !== null) {
+                return;
+            }
+            const centerPos = this.board.pixelPos(hexPos);
+            this.selectedTile.place(hexPos, centerPos, this.players[this.activePlayer]);
+            const index = this.selectableTiles.indexOf(this.selectedTile);
+            if (index > -1) {
+                this.selectableTiles.splice(index, 1);
+            }
+            terrain.tile = this.selectedTile;
+            this.players[this.activePlayer].placedTiles.push(this.selectedTile);
+            this.selectedTile.selectablePos = -1;
+            this.selectedTile = null;
+            this.updateScores(terrain);
+            this.drawNewTile();
+            this.nextPlayer();
+        }
+    }
 
+    selectTile(tile, notifyServer = true) {
+        if (this.selectedTile !== null && this.selectedTile !== tile) {
+            this.selectedTile.selected = false;
+            this.selectedTile = null;
+        }
+        if (!this.gameOver && this.selectedTile === null && this.selectableTiles.includes(tile)) {
+            const tileNum = this.selectableTiles.indexOf(tile);
+            tile.selected = true;
+            this.selectedTile = tile;
+        }
+        return false;
+    }
+    
+    onTouchDownTerrain(terrain, touch) {
+        if (this.gameOver) return true;
+        if (this.selectedTile === null) return true;
+        if (this.selectedTile.scoreTerrain[terrain.code] === null) return true;
+        const player = this.players[this.activePlayer];
+        if (!player.localControl) return true;
+        if (player.placedTiles.length > 0) {
+            let hasNeighbor = false;
+            for (let t of this.board.neighborIter(terrain.hexPos)) {
+                if (player.placedTiles.includes(t.tile)) {
+                    hasNeighbor = true;
+                    break;
+                }
+            }
+            if (!hasNeighbor) return true;
+        }
+        return this.placeTile(terrain);
+    }
+    
+    onTouchDownTile(tile, touch) {
+        if (this.gameOver) return true;
+        if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return true;
+        const p = this.players[this.activePlayer];
+        if (!p.localControl) return true;
+        else {
+            this.wStateLabel.text = 'Place tile';
+            this.wStateLabel.color = colorAverage('white', p.color);
+        }
+        return this.selectTile(tile);
+    }
+
+    scoreTile(terrHex) {
+        const tile = terrHex.tile;
+        tile.score = tile.scoreTerrain[terrHex.code];
+        for (let nterr of this.board.neighborIter(tile.hexPos)) {
+            if (nterr.tile !== null) {
+                tile.score += tile.scoreTiles[nterr.tile.code];
+            }
+        }
+        return tile.score;
+    }
     removePlayers() {
         this.activePlayer = 0;
         this.selectedTile = null;
@@ -378,27 +590,23 @@ class Board extends Widget {
     }
 
     clearLevel() {
-        if (this.terrain !== null) {
-            for (let hp in this.terrain) {
-                this.removeWidget(this.terrain[hp]);
-            }
-            this.terrain = null;
-        }
+        this.board.clearTerrain();
         for (let st of this.selectableTiles) {
-            this.removeWidget(st);
+            this.removeChild(st);
         }
         this.selectableTiles = [];
     }
-
+    /**
+     * @param {Level|null} level 
+     */
     setupLevel(level = null) {
         if (level !== null) {
             this.level = level;
         }
-        this.terrain = new TerrainMap(this.level, this.boardHexCount)
-        for(let thex of this.terrain.iter()) {
-            this.addChild(thex);
-        }
-        this.selectableTiles = [new Castle(this), new Village(this), new Village(this)];
+        if(this.level===null) return;
+        this.board.makeTerrain(this.level);
+        let p = this.players[this.activePlayer]
+        this.selectableTiles = [new Castle(p), new Village(p), new Village(p)];
         let x = 0;
         for (let st of this.selectableTiles) {
             st.selectablePos = x;
@@ -410,10 +618,15 @@ class Board extends Widget {
         let startTile = new tileDict[this.level.startTile]();
         startTile.hexPos = this.level.start;
         this.addChild(startTile);
-        this.terrain.at(...this.level.start).tile = startTile;
+        this.board.terrain.at(...this.level.start).tile = startTile;
         this.players[this.activePlayer].placedTiles.push(startTile);
     }
 
+    /**
+     * 
+     * @param {PlayerSpec[]} playerSpec 
+     * @param {Level|null} level 
+     */
     setupGame(playerSpec, level = null) {
         this.gameOver = false;
         this.wStateLabel.text = '';
@@ -424,29 +637,29 @@ class Board extends Widget {
         // This code could be simplified as the values are the same for every condition, 
         // but I'm keeping it to retain the structure in case you want to change values for specific conditions later.
         if (playerSpec.length === 1) {
-            this.boardHexCount = 9;
+            this.board.boardHexCount = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 2) {
-            this.boardHexCount = 9;
+            this.board.boardHexCount = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 3) {
-            this.boardHexCount = 9;
+            this.board.boardHexCount = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 4) {
-            this.boardHexCount = 9;
+            this.board.boardHexCount = 9;
             this.tilesCount = 24;
         } else { // Assuming 5 or more
-            this.boardHexCount = 9;
+            this.board.boardHexCount = 9;
             this.tilesCount = 24;
         }
         
         for (let p of playerSpec) {
             if (p.type === 0) { // human
                 this.players.push(new Player(p.name, p.color, this));
-            } else if (p.type === 1) { // computer
-                this.players.push(new AIPlayer(p.name, p.color, this));
-            } else if (p.type === 2) { // network
-                this.players.push(new NetworkPlayer(p.name, p.color, this));
+            // } else if (p.type === 1) { // computer
+            //     this.players.push(new AIPlayer(p.name, p.color, this));
+            // } else if (p.type === 2) { // network
+            //     this.players.push(new NetworkPlayer(p.name, p.color, this));
             }
         }
         this.setupLevel(level);
@@ -504,6 +717,7 @@ class Board extends Widget {
     }
     
     drawNewTile() {
+        let hexSide = this.board.hexSide;
         if (this.tileStack.length === 0) {
             return;
         }
@@ -515,45 +729,24 @@ class Board extends Widget {
             let st = this.selectableTiles[x];
             st.selectablePos = x;
             [st.x, st.y] = [
-                0 * (this.hexSide * 2 + 0.01 * this.w),
-                this.h - (1 + x) * (this.hexSide * 2 + 0.01 * this.w)
+                0 * (hexSide * 2 + 0.01 * this.w),
+                this.h - (1 + x) * (hexSide * 2 + 0.01 * this.w)
             ];
-            [st.w, st.h] = [this.hexSide * 2, this.hexSide * 2];
+            [st.w, st.h] = [hexSide * 2, hexSide * 2];
         }
     }
     
     layoutChildren() {
-        this.hexSide = Math.min(
-            this.w / (1.5 * this.boardHexCount + 1),
-            0.95 * this.h / (this.boardHexCount * Math.sqrt(3))
-        );
-        this.hexWidth = this.hexSide * 2;
-        this.hexHeight = this.hexSide * Math.sqrt(3);
-        this.boardHeight = this.hexHeight * this.boardHexCount;
-        this.boardWidth = this.hexSide * (1.5 * this.boardHexCount + 1);
-    
-        if (this.terrain !== null) {
-            for (let x = 0; x < this.boardHexCount; x++) {
-                let yHeight = this.boardHexCount - Math.abs(Math.floor((this.boardHexCount - 1) / 2) - x);
-                for (let y = 0; y < yHeight; y++) {
-                    let center = this.pixelPos([x, y]);
-                    let thex = this.terrain.at(x, y)
-                    thex.w = this.hexWidth;
-                    thex.h = this.hexWidth;
-                    thex.center_x = center[0];
-                    thex.center_y = center[1];
-                    thex.layoutChildren();
-                }
-            }
-        }
-
+        this.applyHints(this.board);
+        this.board.layoutChildren();
+        let hexSide = this.board.hexSide;
         this.selectPos = [
-            3 * (this.hexSide * 2 + 0.01 * this.w),
-            this.h - this.hexSide * 2 - 0.01 * this.w
+            3 * (hexSide * 2 + 0.01 * this.w),
+            this.h - hexSide * 2 - 0.01 * this.w
         ];
 
         for (let p of this.players) {
-            p.boardResize(this.hexSide);
+            p.boardResize(hexSide);
         }    
         // this.scoreboard.size = [
         //     60 * this.players.length + 0.01 * this.w * (this.players.length - 1),
@@ -569,11 +762,12 @@ class Board extends Widget {
             if(st.selected) {
                 [st.x, st.y] = this.selectPos;
             } else {
-                st.x = 0 * (this.hexSide * 2 + 0.01 * this.w);
-                st.y = this.h - (1 + x) * (this.hexSide * 2 + 0.01 * this.w);    
+                st.x = 0 * (hexSide * 2 + 0.01 * this.w);
+                st.y = this.h - (1 + x) * (hexSide * 2 + 0.01 * this.w);    
             }
-            st.w = this.hexSide * 2, 
-            st.h = this.hexSide * 2;
+            st.w = hexSide * 2, 
+            st.h = hexSide * 2;
+            this.applyHints(st);
             st.layoutChildren();
         }
     
@@ -581,159 +775,6 @@ class Board extends Widget {
         this.wStateLabel.layoutChildren();
         this._needsLayout = false;
         console.log("Layout")
-    }
-
-    pixelPos(hexPos) {
-        return [
-            this.center_x + this.hexSide * 1.5 * (hexPos[0] - Math.floor(this.boardHexCount / 2)),
-            this.center_y + this.hexHeight * (hexPos[1] - Math.floor(this.boardHexCount / 2) + Math.abs(hexPos[0] - Math.floor(this.boardHexCount / 2)) / 2.0)
-        ];
-    }
-    
-    hexPos(pixelPos) {
-        const hpos = Math.round((pixelPos[0] - this.center_x) / (this.hexSide * 1.5) + Math.floor(this.boardHexCount / 2));
-        const vpos = Math.round((pixelPos[1] - this.center_y) / this.hexHeight + Math.floor(this.boardHexCount / 2) - Math.abs(hpos - Math.floor(this.boardHexCount / 2)) / 2);
-        if (0 <= hpos && hpos < this.boardHexCount && 0 <= vpos && vpos < this.boardHexCount) {
-            return [hpos, vpos];
-        } else {
-            return null;
-        }
-    }
-    
-    *neighborIter(hexPos) {
-        const yOffsetLeft = hexPos[0] <= Math.floor(this.boardHexCount / 2);
-        const yOffsetRight = hexPos[0] >= Math.floor(this.boardHexCount / 2);
-        const offsets = [
-            [0, -1],
-            [0, +1],
-            [-1, -yOffsetLeft],
-            [-1, +1 - yOffsetLeft],
-            [+1, -yOffsetRight],
-            [+1, +1 - yOffsetRight]
-        ];
-    
-        for (let offset of offsets) {
-            const x = hexPos[0] + offset[0];
-            const y = hexPos[1] + offset[1];
-            if (this.terrain.at(x,y)) {
-                yield this.terrain.at(x,y);
-            }
-        }
-    }
-    
-    getNeighborCount(hexPos) {
-        let value = 0;
-        for (let t of this.neighborIter(hexPos)) {
-            if (t.tile !== null) {
-                value += 1;
-            }
-        }
-        return value;
-    }
-
-    scoreTile(terrHex) {
-        const tile = terrHex.tile;
-        tile.score = tile.scoreTerrain[terrHex.code];
-        for (let nterr of this.neighborIter(tile.hexPos)) {
-            if (nterr.tile !== null) {
-                tile.score += tile.scoreTiles[nterr.tile.code];
-            }
-        }
-        return tile.score;
-    }
-    
-    updateScores(terrain = null) {
-        if (terrain !== null) {
-            this.scoreTile(terrain);
-            for (let terr of this.neighborIter(terrain.hexPos)) {
-                if (terr.tile !== null) {
-                    this.scoreTile(terr);
-                }
-            }
-        }
-        for (let p of this.players) {
-            let score = 0;
-            for (let pt of p.placedTiles) {
-                score += pt.score;
-            }
-            p.scoreMarker.score = score;
-        }
-    }
-    
-    placeTile(terrain, serverCheck = true) {
-        if (!this.gameOver && this.selectedTile !== null) {
-            const hexPos = terrain.hexPos;
-            if (this.terrain.at(...hexPos).tile !== null) {
-                return;
-            }
-            const centerPos = this.pixelPos(hexPos);
-            this.selectedTile.place(hexPos, centerPos, this.players[this.activePlayer]);
-            const index = this.selectableTiles.indexOf(this.selectedTile);
-            if (index > -1) {
-                this.selectableTiles.splice(index, 1);
-            }
-            terrain.tile = this.selectedTile;
-            this.players[this.activePlayer].placedTiles.push(this.selectedTile);
-            this.selectedTile.selectablePos = -1;
-            this.selectedTile = null;
-//            this.updateTerrainAndNeighbors(terrain);
-            this.updateScores(terrain);
-            this.drawNewTile();
-            this.nextPlayer();
-        }
-    }
-
-    selectTile(tile, notifyServer = true) {
-        if (this.selectedTile !== null && this.selectedTile !== tile) {
-            this.selectedTile.selected = false;
-            this.selectedTile = null;
-        }
-        if (!this.gameOver && this.selectedTile === null && this.selectableTiles.includes(tile)) {
-            const tileNum = this.selectableTiles.indexOf(tile);
-            tile.selected = true;
-            this.selectedTile = tile;
-        }
-        return false;
-    }
-    
-    onTouchDownTerrain(terrain, touch) {
-        if (this.gameOver) return true;
-        if (this.selectedTile === null) return true;
-        if (this.selectedTile.scoreTerrain[terrain.code] === null) return true;
-        const player = this.players[this.activePlayer];
-        if (!player.localControl) return true;
-        if (player.placedTiles.length > 0) {
-            let hasNeighbor = false;
-            for (let t of this.neighborIter(terrain.hexPos)) {
-                if (player.placedTiles.includes(t.tile)) {
-                    hasNeighbor = true;
-                    break;
-                }
-            }
-            if (!hasNeighbor) return true;
-        }
-        return this.placeTile(terrain);
-    }
-    
-    onTouchDownTile(tile, touch) {
-        if (this.gameOver) return true;
-        if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return true;
-        const p = this.players[this.activePlayer];
-        if (!p.localControl) return true;
-        else {
-            this.wStateLabel.text = 'Place tile';
-            this.wStateLabel.color = colorAverage('white', p.color);
-        }
-        return this.selectTile(tile);
-    }
-    
-}
-
-class GameScreen extends BoxLayout {
-    constructor() {
-        super();
-        this.board = new Board();
-        this.addChild(this.board);
     }
 }
 
@@ -752,7 +793,8 @@ class PlayerScore extends Label {
         this.color = color;
         this.score = 0.0;
         this.activeTurn = false;
-        this.align = 'right';
+        /**@type {"left"|"center"|"right"}*/
+        this.align = "right";
     }
     on_score() {
         this.text = 'Score: '+Math.floor(this.score)
@@ -801,7 +843,7 @@ class Player {
             if(pt._animation) continue;
             pt.w = hexSide*2;
             pt.h = hexSide*2;
-            [pt.center_x,pt.center_y] = pt.parent.pixelPos(pt.hexPos);
+            [pt.center_x,pt.center_y] = pt.parent.board.pixelPos(pt.hexPos);
         }
     }
 }
@@ -815,57 +857,57 @@ const colorLookup = {
     4: [0.5, 0.5, 0, 1]
 };
 
-class LevelHex extends ImageWidget {
-    constructor(level_id, source_id = 'tiles/terrain_plain.png') {
-        super();
-        this.src = source_id;
-        this.lid = level_id;
-        this.level_id = String(level_id);
-    }
+// class LevelHex extends ImageWidget {
+//     constructor(level_id, source_id = 'tiles/terrain_plain.png') {
+//         super();
+//         this.src = source_id;
+//         this.lid = level_id;
+//         this.level_id = String(level_id);
+//     }
 
-    on_touch_up(touch) {
-        if (this.collideRadius(touch.rect, this.w*0.43)) {
-            this.parent.on_touch_up_level(this, touch);
-        }
-    }
-}
+//     on_touch_up(event, touch) {
+//         if (this.collideRadius(touch.rect, this.w*0.43)) {
+//             this.parent.on_touch_up_level(this, touch);
+//         }
+//     }
+// }
 
-class LevelPicker extends Widget {
-    constructor(gameMenu) {
-        super();
-        this.levels = {};
-        for (let l of levels.Level.subclasses()) {
-            this.levels[l.id] = l;
-        }
-        this.gameMenu = gameMenu;
-        for (let i of Object.keys(this.levels).sort()) {
-            this.addChild(new LevelHex(i));
-        }
-        this.bind('size', this.onSize);
-    }
+// class LevelPicker extends Widget {
+//     constructor(gameMenu) {
+//         super();
+//         this.levels = {};
+//         for (let l of levels.Level.subclasses()) {
+//             this.levels[l.id] = l;
+//         }
+//         this.gameMenu = gameMenu;
+//         for (let i of Object.keys(this.levels).sort()) {
+//             this.addChild(new LevelHex(i));
+//         }
+//         this.bind('size', this.onSize);
+//     }
 
-    layoutChildren() {
-        super.layoutChildren();
-        let W = this.w;
-        let H = this.h;
-        let N = this.children.length;
-        if (W === 0 || W === null || N === 0) {
-            return;
-        }
-        let x = Math.ceil(Math.sqrt(1.0 * N * W / H));
-        let y = Math.ceil(1.0 * x / N);
-        let i = 0;
-        for (let w of this.children.reverse()) {
-            w.size = [W * 0.1, H * 0.1];
-            w.center = [(i + 1) * 3 * w.size[0], this.size[1] / 2];
-            i++;
-        }
-    }
+//     layoutChildren() {
+//         super.layoutChildren();
+//         let W = this.w;
+//         let H = this.h;
+//         let N = this.children.length;
+//         if (W === 0 || W === null || N === 0) {
+//             return;
+//         }
+//         let x = Math.ceil(Math.sqrt(1.0 * N * W / H));
+//         let y = Math.ceil(1.0 * x / N);
+//         let i = 0;
+//         for (let w of this.children.reverse()) {
+//             w.size = [W * 0.1, H * 0.1];
+//             w.center = [(i + 1) * 3 * w.size[0], this.size[1] / 2];
+//             i++;
+//         }
+//     }
 
-    on_touch_up_level(terrain, touch) {
-        this.gameMenu.startSpGame(this.levels[terrain.lid]);
-    }
-}
+//     on_touch_up_level(terrain, touch) {
+//         this.gameMenu.startSpGame(this.levels[terrain.lid]);
+//     }
+// }
 
 class GameMenu extends BoxLayout {
     constructor(props) {
@@ -875,30 +917,29 @@ class GameMenu extends BoxLayout {
         this.wGame = new GameScreen();
         this.addChild(this.wGame);
         this.level = levels[0]
+        this.playerSpec = [];
         this.startSpGame()
     }
 
     restartGame() {
-        let board = this.wGame.children[0];
-        board.setupGame(this.playerSpec, levels[0]);
-        board.startGame();
+        let game = this.wGame;
+        game.setupGame(this.playerSpec, levels[0]);
+        game.startGame();
         this.current = 'game';
     }
 
     startGame() {
         let ps = new PlayerSpec('Player ' + String(1), colorLookup[0], 0);
         this.playerSpec = [ps];
-        let board = this.wGame.children[0];
-        board.setupGame(this.playerSpec, levels[0]);
-        board.startGame();
+        this.wGame.setupGame(this.playerSpec, levels[0]);
+        this.wGame.startGame();
         this.current = 'game';
     }
 
     startSpGame(level) {
-        let board = this.wGame.children[0];
         this.playerSpec = [new PlayerSpec('Player ' + String(1), 'white', 0)];
-        board.setupGame(this.playerSpec, levels[0]);
-        board.startGame();
+        this.wGame.setupGame(this.playerSpec, levels[0]);
+        this.wGame.startGame();
         this.current = 'game';
     }
 }
