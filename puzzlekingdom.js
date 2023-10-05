@@ -1,7 +1,7 @@
 //@ts-check
 
-import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math} from './lib/eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
-import { colorString } from './lib/eskv/lib/modules/math.js';
+import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math} from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
+import { colorString } from '../eskv/lib/modules/math.js';
 
 /*
 New gameplay idea (replaces the current complicated and somewhat boring adjacency scoring fest)
@@ -89,7 +89,6 @@ const terrainImages = {
 
 // Color Average function
 function colorAverage(a, b, aWgt = 0.0) {
-    return a;
     return a.map((x, i) => aWgt * x + (1 - aWgt) * b[i]);
 }
 
@@ -368,7 +367,7 @@ class Board extends Widget {
         this.hexWidth = this.hexWidth??null;
         this.hexSide = this.hexSide??null;
         this.hexHeight = this.hexHeight??null;
-        this.bgColor = this.bgColor??'blue'; //'Ocean Blue';
+        this.bgColor = this.bgColor??'rgba(25, 102, 153, 1.0)'; //'Ocean Blue';
         this.terrain = this.terrain??null;
     }
 
@@ -519,6 +518,7 @@ class GameScreen extends Widget {
             terrain.tile = this.selectedTile;
             this.players[this.activePlayer].placedTiles.push(this.selectedTile);
             this.selectedTile.selectablePos = -1;
+            this.selectedTile.bgColor = null;
             this.selectedTile = null;
             this.updateScores(terrain);
             this.drawNewTile();
@@ -526,6 +526,12 @@ class GameScreen extends Widget {
         }
     }
 
+    /**
+     * 
+     * @param {Tile} tile 
+     * @param {boolean} notifyServer 
+     * @returns 
+     */
     selectTile(tile, notifyServer = true) {
         if (this.selectedTile !== null && this.selectedTile !== tile) {
             this.selectedTile.selected = false;
@@ -538,7 +544,13 @@ class GameScreen extends Widget {
         }
         return false;
     }
-    
+
+    /**
+     * 
+     * @param {TerrainHex} terrain 
+     * @param {Touch} touch 
+     * @returns 
+     */
     onTouchDownTerrain(terrain, touch) {
         if (this.gameOver) return true;
         if (this.selectedTile === null) return true;
@@ -557,7 +569,13 @@ class GameScreen extends Widget {
         }
         return this.placeTile(terrain);
     }
-    
+
+    /**
+     * 
+     * @param {Tile} tile 
+     * @param {Touch} touch 
+     * @returns 
+     */
     onTouchDownTile(tile, touch) {
         if (this.gameOver) return true;
         if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return true;
@@ -565,11 +583,16 @@ class GameScreen extends Widget {
         if (!p.localControl) return true;
         else {
             this.wStateLabel.text = 'Place tile';
-            this.wStateLabel.color = colorAverage('white', p.color);
+            this.wStateLabel.color = p.color; // colorAverage([1,1,1,1], p.color);
         }
         return this.selectTile(tile);
     }
 
+    /**
+     * 
+     * @param {TerrainHex} terrHex 
+     * @returns {number}
+     */
     scoreTile(terrHex) {
         const tile = terrHex.tile;
         tile.score = tile.scoreTerrain[terrHex.code];
@@ -610,6 +633,7 @@ class GameScreen extends Widget {
         let x = 0;
         for (let st of this.selectableTiles) {
             st.selectablePos = x;
+            st.bgColor = 'gray';
             this.addChild(st);
             x++;
         }
@@ -685,7 +709,7 @@ class GameScreen extends Widget {
         p.startTurn();
         if (p.localControl) {
             this.wStateLabel.text = 'Select tile';
-            this.wStateLabel.color = colorAverage('white', p.color);
+            this.wStateLabel.color = p.color; // colorAverage([1,1,1,1], p.color);
         } else {
             this.wStateLabel.text = '';
             this.wStateLabel.color = 'white';
@@ -705,10 +729,10 @@ class GameScreen extends Widget {
             if (hiScore > 80) rating = 'The people are joyous!';
             if (hiScore > 90) rating = 'Welcome to the history books';
             if (hiScore > 100) rating = 'Hail to the king!';
-            this.wStateLabel.color = colorAverage('white', winners[0].color);
+            this.wStateLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
             this.wStateLabel.text = `Game over - ${rating}`;
         } else if (winners.length === 1) {
-            this.wStateLabel.color = colorAverage('white', winners[0].color);
+            this.wStateLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
             this.wStateLabel.text = `Game over - ${winners[0].name} wins`;
         } else {
             this.wStateLabel.color = 'white';
@@ -722,7 +746,7 @@ class GameScreen extends Widget {
             return;
         }
         let t = this.tileStack.pop();
-    
+        t.bgColor = 'gray'
         this.selectableTiles.push(t);
         this.addChild(t);
         for (let x = 0; x < this.selectableTiles.length; x++) {
@@ -802,21 +826,27 @@ class PlayerScore extends Label {
 }
 
 class Player {
-    constructor(name, color, board) {
+    /**
+     * 
+     * @param {string} name 
+     * @param {string} color 
+     * @param {GameScreen} screen
+     */
+    constructor(name, color, screen) {
         this.localControl = true;
         this.name = name;
         this.color = color;
-        this.board = board;
+        this.screen = screen;
         this.placedTiles = [];
         this.scoreMarker = new PlayerScore(this.name.substring(0, 2), color);
-        this.board.scoreboard.addChild(this.scoreMarker);
+        this.screen.scoreboard.addChild(this.scoreMarker);
     }
 
     delete() {
         this.reset();
-        this.board.scoreboard.removeWidget(this.scoreMarker);
+        this.screen.scoreboard.removeChild(this.scoreMarker);
         for (let pt of this.placedTiles) {
-            this.board.removeChild(pt);
+            this.screen.removeChild(pt);
         }
         this.placedTiles = [];
     }
@@ -825,7 +855,7 @@ class Player {
         this.scoreMarker.activeTurn = false;
         this.scoreMarker.score = 0;
         for (let pt of this.placedTiles) {
-            this.board.removeChild(pt);
+            this.screen.removeChild(pt);
         }
         this.placedTiles = [];
     }
@@ -838,6 +868,10 @@ class Player {
         this.scoreMarker.activeTurn = false;
     }
 
+    /**
+     * 
+     * @param {number} hexSide 
+     */
     boardResize(hexSide) {
         for (let pt of this.placedTiles) {
             if(pt._animation) continue;
@@ -910,6 +944,10 @@ const colorLookup = {
 // }
 
 class GameMenu extends BoxLayout {
+    /**
+     * 
+     * @param {import('../eskv/lib/modules/widgets.js').BoxLayoutProperties} props 
+     */
     constructor(props) {
         super(props);
         this.playerCount = 0;
@@ -918,7 +956,7 @@ class GameMenu extends BoxLayout {
         this.addChild(this.wGame);
         this.level = levels[0]
         this.playerSpec = [];
-        this.startSpGame()
+        this.startSpGame(this.level);
     }
 
     restartGame() {
@@ -936,6 +974,10 @@ class GameMenu extends BoxLayout {
         this.current = 'game';
     }
 
+    /**
+     * 
+     * @param {Level} level 
+     */
     startSpGame(level) {
         this.playerSpec = [new PlayerSpec('Player ' + String(1), 'white', 0)];
         this.wGame.setupGame(this.playerSpec, levels[0]);
@@ -945,6 +987,13 @@ class GameMenu extends BoxLayout {
 }
 
 class StatusLabel extends Label {
+    /**
+     * 
+     * @param {string} text 
+     * @param {string} bgColor 
+     * @param {string} color 
+     * @param {import('../eskv/lib/modules/widgets.js').WidgetSizeHints} hints 
+     */
     constructor(text, bgColor, color, hints) {
         super({text:text, bgColor:bgColor, color:color, hints:hints});
     }
