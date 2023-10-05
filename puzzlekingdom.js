@@ -117,8 +117,8 @@ class Tile extends ImageWidget {
             a.start(this);
         }
     }
-    
-    on_touch_down(event, touch) {
+
+    on_touch_down(event, object, touch) {
         if(this.collideRadius(touch.rect, this.w*0.43)) {
             if (this.parent instanceof GameScreen && this.parent.onTouchDownTile(this, touch)) {
                 return true;
@@ -127,7 +127,7 @@ class Tile extends ImageWidget {
         return false;
     }
     
-    on_selected(event, value) {
+    on_selected(event, object, value) {
         let parent = this.parent;
         if(!(parent instanceof GameScreen)) return;
         let board = parent.board;
@@ -303,7 +303,7 @@ class TerrainHex extends ImageWidget {
         [this.hexPosX, this.hexPosY] = pos; 
     }
 
-    on_touch_down(event, touch) {
+    on_touch_down(event, object, touch) {
         if(this.collideRadius(touch.rect, this.w*0.43)) { //TODO: Scale it
             let gameScreen = this.parent?.parent;
             if(gameScreen instanceof GameScreen) {
@@ -578,7 +578,7 @@ class GameScreen extends Widget {
      */
     onTouchDownTile(tile, touch) {
         if (this.gameOver) return true;
-        if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return true;
+        if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return false;
         const p = this.players[this.activePlayer];
         if (!p.localControl) return true;
         else {
@@ -820,7 +820,7 @@ class PlayerScore extends Label {
         /**@type {"left"|"center"|"right"}*/
         this.align = "right";
     }
-    on_score() {
+    on_score(event, object, data) {
         this.text = 'Score: '+Math.floor(this.score)
     }
 }
