@@ -35,7 +35,7 @@ Tradeship: placed on water tile -- grants access to all connected land. During a
 class Level {
     constructor() {
         this.levelSeed = null;
-        this.tileSet = 'CCVVVVVVVVVAAAAAFFFFFSS';
+        this.tileSet = 'CCVVVVVVVVVTMAAAAAFFFFFSS';
         this.map = ``;
         this.start = [4,4];
         this.startTile = 'C';
@@ -83,7 +83,7 @@ const terrainImages = {
     'F': 'tiles/tile_farm.png',
     'M': 'tiles/tile_mine.png',
     'S': 'tiles/tile_stronghold.png',
-    'T': 'tiles/tile_tradeship.png'
+    'T': 'tiles/tile_tradeship.png',
 };
 
 
@@ -98,10 +98,13 @@ class Tile extends ImageWidget {
     value = 0;
     selected = false;
     selectablePos = -1;
+    /**@type {[number, number]} */
     hexPos = [-1, -1];
     tileColor = 'blue';
     textColor = 'white';
     score = 0;
+    scoreTiles = {};
+    scoreTerrain = {};
     constructor(player = null) {
         super({});
         console.log('Tile instance', this.code);
@@ -230,6 +233,36 @@ class Farm extends Tile {
     }
 }
 
+class TargetTile extends Label {
+    score = 0;
+    code = '*';
+    constructor(props) {
+        super();        
+        this.updateProperties(props)
+        const score = this.score;
+        this.text = score==0? '--':
+                    score>0? '+'+score:
+                    ''+score;
+        this.color = 'rgba(20,20,20,0.8)'
+        this.color = this.score>0?'rgba(60,40,0,0.85)':
+                    this.score===0?'rgba(20,20,20,0.85)':
+                    'rgba(72,32,29,0.85)';
+}
+    draw(app, ctx) {
+        ctx.beginPath();
+        ctx.arc(this.center_x, this.center_y, this.w/3, 0, 2*Math.PI);
+        ctx.fillStyle = this.score>0?'rgba(255,240,0,0.5)':
+                        this.score===0?'rgba(100,100,100,0.5)':
+                        'rgba(168,72,65,0.75)';
+        ctx.strokeStyle = 'rgba(80,80,80,0.5)';
+        ctx.lineWidth = this.w/10;
+        ctx.stroke();
+        ctx.fill();
+        super.draw(app, ctx);
+    }
+}
+
+
 const tileDict = {
     'C': Castle,
     'V': Village,
@@ -241,12 +274,17 @@ const tileDict = {
 };
 
 class TerrainMap extends Array {
+    /**
+     * 
+     * @param {Level} level 
+     * @param {number} boardHexCount 
+     */
     constructor(level, boardHexCount) {
         super(); //total number of cells in the x direction
         for(let i=0; i<boardHexCount; ++i) {
             this.push([]);
         }
-        this.boardHexCount = boardHexCount
+        this.boardHexCount = boardHexCount;
         let i = 0;
         let terrainmap = level.map.replace(/\n/g, '').replace(/ /g, '');
         for (let x = 0; x < this.boardHexCount; x++) {
@@ -258,6 +296,9 @@ class TerrainMap extends Array {
             }
         }
     }
+    /**
+     * @yields {TerrainHex}
+     */
     *iter() {
         for(let a of this) {
             for (let hex of a) {
@@ -265,6 +306,11 @@ class TerrainMap extends Array {
             }
         }
     }
+    /**
+     * @param {number} x 
+     * @param {number} y
+     * @yields {TerrainHex|undefiend}
+     */
     at(x, y) {
         try {
             return this[x][y];
@@ -272,6 +318,11 @@ class TerrainMap extends Array {
             return undefined;
         }
     }
+    /**
+     * @param {number} x 
+     * @param {number} y
+     * @param {TerrainHex} terrain
+     */
     set(x, y, terrain) {
         this[x][y] = terrain;
     }
@@ -295,6 +346,7 @@ class TerrainHex extends ImageWidget {
         this.allowStretch = true;
     }
 
+    /**@type {[number, number]} */
     get hexPos() { 
         return [this.hexPosX, this.hexPosY]; 
     }
@@ -359,16 +411,24 @@ const terrainClass = {
 // }
 
 class Board extends Widget {
+    /**@type {number} */
+    boardHexCount = 1;
+    /**@type {number} */
+    boardWidth = 1;
+    /**@type {number} */
+    boardHeight = 1;
+    /**@type {number} */
+    hexWidth = 1;
+    /**@type {number} */
+    hexSide = 1;
+    /**@type {number} */
+    hexHeight = 1;
+    /**@type {string} */
+    bgColor = 'rgba(25, 102, 153, 1.0)'; //'Ocean Blue';
+    /**@type {TerrainMap|null} */
+    terrain = null;
     constructor(props) {
         super(props);
-        this.boardHexCount = this.boardHexCount??null;
-        this.boardWidth = this.boardWidth??null;
-        this.boardHeight = this.boardHeight??null;
-        this.hexWidth = this.hexWidth??null;
-        this.hexSide = this.hexSide??null;
-        this.hexHeight = this.hexHeight??null;
-        this.bgColor = this.bgColor??'rgba(25, 102, 153, 1.0)'; //'Ocean Blue';
-        this.terrain = this.terrain??null;
     }
 
     clearTerrain() {
@@ -404,6 +464,10 @@ class Board extends Widget {
         }
     }
     
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     */
     *neighborIter(hexPos) {
         const yOffsetLeft = hexPos[0] <= Math.floor(this.boardHexCount / 2)?1:0;
         const yOffsetRight = hexPos[0] >= Math.floor(this.boardHexCount / 2)?1:0;
@@ -419,7 +483,7 @@ class Board extends Widget {
         for (let offset of offsets) {
             const x = hexPos[0] + offset[0];
             const y = hexPos[1] + offset[1];
-            if (this.terrain.at(x,y)) {
+            if (this.terrain && this.terrain.at(x,y)) {
                 yield this.terrain.at(x,y);
             }
         }
@@ -471,6 +535,7 @@ class GameScreen extends Widget {
         this.level = null;
         this.tiles = [];
         this.selectableTiles = [];
+        this.placementTargets = [];
         this.tileStack = [];
         this.selectedTile = null;
         this.activePlayer = 0;
@@ -503,10 +568,16 @@ class GameScreen extends Widget {
         }
     }
     
+    /**
+     * 
+     * @param {TerrainHex} terrain 
+     * @param {boolean} serverCheck 
+     * @returns 
+     */
     placeTile(terrain, serverCheck = true) {
         if (!this.gameOver && this.selectedTile !== null) {
             const hexPos = terrain.hexPos;
-            if (this.board.terrain.at(...hexPos).tile !== null) {
+            if (this.board.terrain?.at(...hexPos).tile !== null) {
                 return;
             }
             const centerPos = this.board.pixelPos(hexPos);
@@ -516,6 +587,7 @@ class GameScreen extends Widget {
                 this.selectableTiles.splice(index, 1);
             }
             terrain.tile = this.selectedTile;
+            this.clearPlacementTargets();
             this.players[this.activePlayer].placedTiles.push(this.selectedTile);
             this.selectedTile.selectablePos = -1;
             this.selectedTile.bgColor = null;
@@ -557,17 +629,25 @@ class GameScreen extends Widget {
         if (this.selectedTile.scoreTerrain[terrain.code] === null) return true;
         const player = this.players[this.activePlayer];
         if (!player.localControl) return true;
+        if (!this.hasNeighbor(player, terrain)) return true;
+        return this.placeTile(terrain);
+    }
+
+    /**
+     * 
+     * @param {Player} player 
+     * @param {TerrainHex} terrain 
+     * @returns 
+     */
+    hasNeighbor(player, terrain) {
         if (player.placedTiles.length > 0) {
-            let hasNeighbor = false;
             for (let t of this.board.neighborIter(terrain.hexPos)) {
                 if (player.placedTiles.includes(t.tile)) {
-                    hasNeighbor = true;
-                    break;
+                    return true;
                 }
             }
-            if (!hasNeighbor) return true;
         }
-        return this.placeTile(terrain);
+        return false;
     }
 
     /**
@@ -584,6 +664,7 @@ class GameScreen extends Widget {
         else {
             this.wStateLabel.text = 'Place tile';
             this.wStateLabel.color = p.color; // colorAverage([1,1,1,1], p.color);
+            this.setPlacementTargets(tile);
         }
         return this.selectTile(tile);
     }
@@ -594,15 +675,69 @@ class GameScreen extends Widget {
      * @returns {number}
      */
     scoreTile(terrHex) {
-        const tile = terrHex.tile;
-        tile.score = tile.scoreTerrain[terrHex.code];
-        for (let nterr of this.board.neighborIter(tile.hexPos)) {
+        terrHex.tile.score = this.getTileScore(terrHex, terrHex.tile);
+        return terrHex.tile.score;
+    }
+
+    /**
+     * 
+     * @param {TerrainHex} terrHex 
+     * @param {Tile} tile 
+     * @returns {number}
+     */
+    getTileScore(terrHex, tile) {
+        let score = tile.scoreTerrain[terrHex.code];
+        for (let nterr of this.board.neighborIter(terrHex.hexPos)) {
             if (nterr.tile !== null) {
-                tile.score += tile.scoreTiles[nterr.tile.code];
+                score += tile.scoreTiles[nterr.tile.code];
             }
         }
-        return tile.score;
+        return score;
     }
+
+
+    /**
+     * @param {Tile} tile */
+    setPlacementTargets(tile) {
+        this.clearPlacementTargets();
+        let player = this.players[this.activePlayer];
+        if(!this.board.terrain) return;
+        let targets = [];
+        for(let thex of this.board.terrain.iter()) {
+            if(thex.tile!==null) continue;
+            if(!this.hasNeighbor(player, thex)) continue;
+            if(tile.scoreTerrain[thex.code]===null) continue;
+            let score = this.getTileScore(thex, tile);
+            for (let nterr of this.board.neighborIter(thex.hexPos)) {
+                if (nterr.tile !== null) {
+                    score += nterr.tile.scoreTiles[tile.code];
+                }
+            }
+            let tt = new TargetTile({
+                w: this.board.hexSide * 2,
+                h: this.board.hexSide * 2,
+                score: score,
+                hexPos: thex.hexPos.slice(),
+            })
+            let xy = this.board.pixelPos(thex.hexPos)
+            tt.center_x = xy[0];
+            tt.center_y = xy[1];
+            targets.push(tt);
+
+        }
+        this.placementTargets = targets;
+        for(let c of targets) {
+            this.addChild(c);
+        }
+    }
+
+    clearPlacementTargets() {
+        for(let c of this.placementTargets) {
+            this.removeChild(c)
+        }
+        this.placementTargets = [];
+    }
+
     removePlayers() {
         this.activePlayer = 0;
         this.selectedTile = null;
@@ -642,7 +777,7 @@ class GameScreen extends Widget {
         let startTile = new tileDict[this.level.startTile]();
         startTile.hexPos = this.level.start;
         this.addChild(startTile);
-        this.board.terrain.at(...this.level.start).tile = startTile;
+        if(this.board.terrain && this.level) this.board.terrain.at(this.level.start[0], this.level.start[1]).tile = startTile;
         this.players[this.activePlayer].placedTiles.push(startTile);
     }
 
@@ -772,12 +907,15 @@ class GameScreen extends Widget {
         for (let p of this.players) {
             p.boardResize(hexSide);
         }    
-        // this.scoreboard.size = [
-        //     60 * this.players.length + 0.01 * this.w * (this.players.length - 1),
-        //     80
-        // ];
-        // this.scoreboard.right = 0.99 * this.w;
-        // this.scoreboard.top = this.h - 0.01 * this.w;
+
+        for (let tt of this.placementTargets) {
+            let hp = this.board.pixelPos(tt.hexPos);
+            tt.w = hexSide * 2,
+            tt.h = hexSide * 2,
+            tt.center_x = hp[0];
+            tt.center_y = hp[1];
+        }
+
         this.applyHints(this.scoreboard);
         this.scoreboard.layoutChildren();
     
