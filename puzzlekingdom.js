@@ -777,8 +777,13 @@ class GameScreen extends Widget {
         let startTile = new tileDict[this.level.startTile]();
         startTile.hexPos = this.level.start;
         this.addChild(startTile);
-        if(this.board.terrain && this.level) this.board.terrain.at(this.level.start[0], this.level.start[1]).tile = startTile;
-        this.players[this.activePlayer].placedTiles.push(startTile);
+        if(this.board.terrain && this.level) {
+            let terr = this.board.terrain.at(this.level.start[0], this.level.start[1]);
+            terr.tile = startTile;
+            this.players[this.activePlayer].placedTiles.push(startTile);
+            this.scoreTile(terr);
+            this.updateScores();
+        }
     }
 
     /**
