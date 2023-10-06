@@ -4,7 +4,7 @@ import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math
 import { colorString } from '../eskv/lib/modules/math.js';
 
 /*
-New gameplay idea (replaces the current complicated and somewhat boring adjacency scoring fest)
+New gameplay idea (potentially replaces the current complicated and somewhat boring adjacency scoring fest)
 Game played in 5-10 rounds depending on level. Each round:
 1. Start of round phase: Draw an event and show to player. It resolves at round end
 2. Building phase: Draw 5 building tiles face up. Play the 5 tiles to build the buildings on the terrain. 
@@ -59,7 +59,7 @@ class Level1 extends Level {
         `;
         this.start = [4, 4];
         this.startTile = 'C';
-        this.tileSet = 'CCVVVVVVVVVAAAAAFFFFFSS';
+        this.tileSet = 'CCVVVVVVVVVTMAAAAAFFFFFSS';
     }
 }
 
