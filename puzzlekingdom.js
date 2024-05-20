@@ -1,7 +1,11 @@
 //@ts-check
 
-import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math} from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
+import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math, rand} from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
 import { colorString } from '../eskv/lib/modules/math.js';
+import { getRandomInt } from '../eskv/lib/modules/random.js';
+
+rand.setPRNG('jsf32');
+rand.setSeed(Date.now());
 
 /*
 New gameplay idea (potentially replaces the current complicated and somewhat boring adjacency scoring fest)
@@ -15,7 +19,7 @@ Player is evaluated against end game objectives, which vary by mission
 Resources:
 Food: Need one food for every worker.
 Workers: Each building uses a certain number of workers. Surplus workers become military if a stronghold is present.
-Force: Number of suplus workers
+Force: Number of surplus workers
 Coin: Used to supply food and workers, and end game points.
 
 No activations when there are food or worker shortages? Or just force spending of money, including dipping into negative balance
@@ -23,7 +27,7 @@ No activations when there are food or worker shortages? Or just force spending o
 Building functions:
 Farm: place on pasture/forest; provides 1 food/level for its space and each empty adjacent pasture space.
 Village: place on pasture/mountain/forest; provides 1 worker for each adjacent building except other villages, which reduce worker production by 1.
-Mine: provides 1 coin for each adjacent space.
+Mine: provides 1 coin for it's space and each adjacent mountain space.
 Stronghold: provides military strength for each surplus worker.
 Castle: provides 1 governance action at end of current round (or immediately?).
 Abbey: grants +1 effectiveness to adjacent farm, village and mine. When placed, enhances 1 building at end of current round.
@@ -39,6 +43,27 @@ class Level {
         this.map = ``;
         this.start = [4,4];
         this.startTile = 'C';
+    }
+}
+
+class EmptyLevel extends Level {
+    constructor() {
+        super();
+        this.id = 1;
+        this.map = `
+            ppppp
+            pppppp
+            ppppppp
+            pppppppp
+            ppppppppp
+            pppppppp
+            ppppppp
+            pppppp
+            ppppp
+        `;
+        this.start = [4, 4];
+        this.startTile = 'C';
+        this.tileSet = 'CCVVVVVVVVVTMAAAAAFFFFFSS';
     }
 }
 
@@ -63,7 +88,221 @@ class Level1 extends Level {
     }
 }
 
-var levels = [new Level1()];
+/**
+ * @extends {Map<number, string|undefined>}
+ */
+class TMap extends Map {
+    /**
+     * 
+     * @param {string} stringMap 
+     * @param {number} [size=9] 
+     */
+    constructor(stringMap, size=9) {
+        super();
+        this.mapSize = size;
+        let r = 0;
+        for(let row of stringMap.trim().split('\n')) {
+            let c = 0;
+            for(let t of row.trim()) {
+                this.set(r*size + c, t);
+                c++;
+            }
+            r++;
+        }
+    }
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     */
+    at(hexPos) {
+        try {
+            return this.get(hexPos[1]*this.mapSize+hexPos[0]);
+        } catch {
+            return undefined;
+        }
+    }
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     * @param {string|undefined} value 
+     */
+    put(hexPos, value) {
+        this.set(hexPos[1]*this.mapSize+hexPos[0], value);
+    }
+    get hexCount() {
+        return 3*this.mapSize*(this.mapSize-1)+1
+    }
+    toString() {
+        let str = '';
+        for(let r=0; r<this.mapSize; r++) {
+            const w = Math.floor(this.mapSize/2);
+            const width = this.mapSize - Math.abs(w-r);
+            for(let c=0;c<width;c++) {
+                str += this.get(r*this.mapSize+c);
+            }
+            str+='\n';
+        }
+        return str;
+    }
+    *iter() {
+        for(let r=0; r<this.mapSize; r++) {
+            const w = Math.floor(this.mapSize/2);
+            const width = this.mapSize - Math.abs(w-r);
+            for(let c=0;c<width;c++) {
+                yield this.get(r*this.mapSize+c);
+            }
+        }
+    }
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     * @yields {TerrainHex}
+     */
+    *neighborPositions(hexPos) {
+        const xOffsetLeft = hexPos[1] <= Math.floor(this.mapSize / 2)?1:0;
+        const xOffsetRight = hexPos[1] >= Math.floor(this.mapSize / 2)?1:0;
+        const offsets = [
+            [-1, 0],
+            [+1, 0],
+            [-xOffsetLeft, -1],
+            [+1 - xOffsetLeft, -1],
+            [-xOffsetRight, +1],
+            [+1 - xOffsetRight, +1],
+        ];
+    
+        for (let offset of offsets) {
+            const x = hexPos[0] + offset[0];
+            const y = hexPos[1] + offset[1];
+            if(this.has(y*this.mapSize+x)) yield [x, y];
+        }
+    }    
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     * @yields {TerrainHex}
+     */
+    *neighborIter(hexPos) {
+        const xOffsetLeft = hexPos[1] <= Math.floor(this.mapSize / 2)?1:0;
+        const xOffsetRight = hexPos[1] >= Math.floor(this.mapSize / 2)?1:0;
+        const offsets = [
+            [-1, 0],
+            [+1, 0],
+            [-xOffsetLeft, -1],
+            [+1 - xOffsetLeft, -1],
+            [-xOffsetRight, +1],
+            [+1 - xOffsetRight, +1],
+        ];
+    
+        for (let offset of offsets) {
+            const x = hexPos[0] + offset[0];
+            const y = hexPos[1] + offset[1];
+            const t = this.at([x,y]);
+            if(t) yield t;
+        }
+    }    
+    getNeighborCount(hexPos) {
+        let value = 0;
+        for (let t of this.neighborIter(hexPos)) {
+            if (t !== undefined) {
+                value += 1;
+            }
+        }
+        return value;
+    }    
+    hasEdge(hexPos) {
+        return this.getNeighborCount(hexPos)<6;
+    }
+    /**
+     * 
+     * @returns {[number,number]}
+     */
+    getRandomPos() {
+        let y = rand.getRandomInt(this.mapSize);
+        let w = Math.floor(this.mapSize/2);
+        let width = this.mapSize - Math.abs(w-y);
+        let x = rand.getRandomInt(width);
+        return [x,y];
+    }
+}
+
+class RandomLevel extends Level {
+    /**
+     * 
+     * @param {number} size 
+     */
+    constructor(size) {
+        super();
+        this.start = [4, 4];
+        this.startTile = 'C';
+        this.tileSet = 'CCVVVVVVVVVTMAAAAAFFFFFSS';    
+        const mapString = `
+            xxxxx
+            xxxxxx
+            xxxxxxx
+            xxxxxxxx
+            xxxxxxxxx
+            xxxxxxxx
+            xxxxxxx
+            xxxxxx
+            xxxxx
+        `;
+        let tmap = new TMap(mapString, size);
+        this.makeMap(tmap);
+        this.id = 1; 
+        this.map = tmap.toString();
+    }
+    /**
+     * 
+     * @param {TMap} tmap 
+     */
+    makeMap(tmap) {
+        const startPos = tmap.getRandomPos();
+        const basePlacementSet = ['p','p','p','f','f','m','m','w'];
+        /**
+         * 
+         * @param {[number, number]} position 
+         */
+        function recursePlacement(position) {
+            const adjacencies = [...tmap.neighborIter(position)];
+            const countWater = adjacencies.reduce((prev, cur)=>cur==='w'?prev+1:prev, 0);
+            const extras = adjacencies.filter((val)=>val!=='w');
+            const atEdge = tmap.hasEdge(position);
+            let placements = [...basePlacementSet, ...extras];
+            if(countWater===1 && !atEdge) placements = ['w'];
+            const terrain = rand.choose(placements);
+            tmap.put(position, terrain);
+            for(let hp of rand.shuffle([...tmap.neighborPositions(position)])) {
+                if(tmap.at(hp)==='x') recursePlacement(hp);
+            }
+        }
+        recursePlacement(startPos);
+        const startTerrain = tmap.at(startPos);
+        this.startTile =    startTerrain==='w'? 'T':
+                            startTerrain==='m'? 'M':
+                            rand.choose(['C','V','A','F','S']);
+        let tileSet = 'CCVVVVVVVVAAAAFFFFS';
+        const mountainCount = [...tmap.iter()].reduce((prev,cur)=>cur==='m'?prev+1:prev, 0);
+        const waterCount = [...tmap.iter()].reduce((prev,cur)=>cur==='w'?prev+1:prev, 0);
+        if(mountainCount>0 && this.startTile!='M') tileSet+='M';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        if(mountainCount>2) tileSet+='M';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        if(mountainCount>5) tileSet+='M';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        
+        if(waterCount>0 && this.startTile!='T') tileSet+='M';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        if(waterCount>2) tileSet+='T';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        if(waterCount>5) tileSet+='T';
+        else tileSet += rand.choose(['C','V','A','F','S'])
+        this.tileSet = tileSet;
+        //TODO: x,y here are the opposite of how they are presented in the UI.
+        this.start = [startPos[1], startPos[0]];
+    }
+}
+
+var levels = [new RandomLevel(9)];
 
 // Load Images function
 const terrainImages = {
@@ -107,7 +346,6 @@ class Tile extends ImageWidget {
     scoreTerrain = {};
     constructor(player = null) {
         super({});
-        console.log('Tile instance', this.code);
         this.wLabel = null;
         this.player = player;
     }
@@ -147,6 +385,27 @@ class Tile extends ImageWidget {
             a.start(this);
         }
     }
+    /**
+     * 
+     * @param {Board} board
+     */
+    production(board) {
+        return {}
+    }
+}
+
+/**
+ * 
+ * @param {Board} board 
+ * @param {[number, number]} hexPos 
+ */
+function blessed(board, hexPos) {
+    for(let t of board.neighborIter(this.hexPos)) {
+        if(t.tile!==null && !(t.tile instanceof Abbey)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 class Castle extends Tile {
@@ -158,6 +417,10 @@ class Castle extends Tile {
         this.tileColor = 'purple';
         this.textColor = 'white';
         this.src = terrainImages['C'];
+    }
+    /** @type {Tile['production']} */
+    production(board) {
+        return {governance:1}
     }
 }
 
@@ -171,6 +434,16 @@ class Village extends Tile {
         this.textColor = 'white';
         this.src = terrainImages['V'];
     }
+    /** @type {Tile['production']} */
+    production(board) {
+        let workers=0;
+        for(let t of board.neighborIter(this.hexPos)) {
+            if(t.tile!==null && !(t.tile instanceof Village)) {
+                workers+=1;
+            }
+        }
+        return {workers:workers*(blessed(board, this.hexPos)?2:1)};
+    }
 }
 
 class Stronghold extends Tile {
@@ -182,6 +455,16 @@ class Stronghold extends Tile {
         this.tileColor = 'red';
         this.textColor = 'white';
         this.src = terrainImages['S'];
+    }
+    /** @type {Tile['production']} */
+    production(board) {
+        let force = 0        
+        for(let t of board.neighborIter(this.hexPos)) {
+            if(t.tile instanceof Village) {
+                force+=1;
+            }
+        }
+        return {force:force*(blessed(board, this.hexPos)?2:1)} //TODO: Force = spare workers OR force = adjacent villages
     }
 }
 
@@ -195,6 +478,16 @@ class Mine extends Tile {
         this.textColor = 'white';
         this.src = terrainImages['M'];
     }
+    /** @type {Tile['production']} */
+    production(board) {
+        let gold=0;
+        for(let t of board.neighborIter(this.hexPos)) {
+            if(t instanceof Mountain) {
+                gold+=1;
+            }
+        }
+        return {gold:gold*(blessed(board, this.hexPos)?2:1)};
+    }
 }
 
 class Tradeship extends Tile {
@@ -207,6 +500,10 @@ class Tradeship extends Tile {
         this.textColor = 'white';
         this.src = terrainImages['T'];
     }
+    /** @type {Tile['production']} */
+    production(board) {
+        return {}; //Tradeships allow exchange of gold for other resources during the activation phase
+    }    
 }
 
 class Abbey extends Tile {
@@ -219,6 +516,10 @@ class Abbey extends Tile {
         this.textColor = 'white';
         this.src = terrainImages['A'];
     }
+    /** @type {Tile['production']} */
+    production(board) {
+        return {};
+    }    
 }
 
 class Farm extends Tile {
@@ -230,6 +531,16 @@ class Farm extends Tile {
         this.tileColor = colorString([0.2, 0.5, 0.2, 1.0]);
         this.textColor = 'white';
         this.src = terrainImages['F'];
+    }
+    /** @type {Tile['production']} */
+    production(board) {
+        let food = 0;
+        for(let t of board.neighborIter(this.hexPos)) {
+            if(t instanceof Plain) {
+                food+=1;
+            }
+        }
+        return {food:food*(blessed(board, this.hexPos)?2:1)};
     }
 }
 
@@ -276,19 +587,24 @@ const tileDict = {
 class TerrainMap extends Array {
     /**
      * 
-     * @param {Level} level 
-     * @param {number} boardHexCount 
+     * @param {Level|null} level 
+     * @param {number} size 
      */
-    constructor(level, boardHexCount) {
+    constructor(level, size) {
         super(); //total number of cells in the x direction
-        for(let i=0; i<boardHexCount; ++i) {
+        for(let i=0; i<size; ++i) {
             this.push([]);
         }
-        this.boardHexCount = boardHexCount;
+        this.size = size;
         let i = 0;
-        let terrainmap = level.map.replace(/\n/g, '').replace(/ /g, '');
-        for (let x = 0; x < this.boardHexCount; x++) {
-            let yHeight = this.boardHexCount - Math.abs((this.boardHexCount - 1) / 2 - x);
+        let terrainmap;
+        if(level===null) {
+            terrainmap = new EmptyLevel().map.replace(/\n/g, '').replace(/ /g, '');
+        } else {
+            terrainmap = level.map.replace(/\n/g, '').replace(/ /g, '');
+        }
+        for (let x = 0; x < this.size; x++) {
+            let yHeight = this.size - Math.abs((this.size - 1) / 2 - x);
             for (let y = 0; y < yHeight; y++) {
                 let ht = new terrainClass[terrainmap[i]]({hexPos: [x, y]});
                 this[x].push(ht);
@@ -309,7 +625,7 @@ class TerrainMap extends Array {
     /**
      * @param {number} x 
      * @param {number} y
-     * @yields {TerrainHex|undefiend}
+     * @returns {TerrainHex|undefined}
      */
     at(x, y) {
         try {
@@ -411,8 +727,8 @@ const terrainClass = {
 // }
 
 class Board extends Widget {
-    /**@type {number} */
-    boardHexCount = 1;
+    /**@type {number} Height and max width of the board in number of hexes  */
+    boardSize = 1;
     /**@type {number} */
     boardWidth = 1;
     /**@type {number} */
@@ -425,52 +741,63 @@ class Board extends Widget {
     hexHeight = 1;
     /**@type {string} */
     bgColor = 'rgba(25, 102, 153, 1.0)'; //'Ocean Blue';
-    /**@type {TerrainMap|null} */
-    terrain = null;
-    constructor(props) {
-        super(props);
-    }
-
-    clearTerrain() {
-        if (this.terrain !== null) {
-            for (let hp in this.terrain) {
-                this.removeChild(this.terrain[hp]);
-            }
-            this.terrain = null;
-        }
-    }
-
-    makeTerrain(level) {
-        this.terrain = new TerrainMap(level, this.boardHexCount)
-        for(let thex of this.terrain.iter()) {
+    constructor(props={}) {
+        super();
+        if(props) this.updateProperties(props);
+        /**@type {TerrainMap} */
+        this._terrainMap = new TerrainMap(null, this.boardSize);
+        for(let thex of this._terrainMap.iter()) {
             this.addChild(thex);
-        }
+        }    
+    }
+    /**@type {TerrainMap} */
+    set terrainMap(value) {
+        for (let thex of this._terrainMap.iter()) {
+            this.removeChild(thex);
+        }    
+        this._terrainMap = value;
+        for(let thex of this._terrainMap.iter()) {
+            this.addChild(thex);
+        }    
+    }
+    get terrainMap() {
+        return this._terrainMap;
+    }
+    /**
+     * 
+     * @param {Level|null} level 
+     */
+    makeTerrain(level) {
+        this.terrainMap = new TerrainMap(level, this.boardSize);
     }
 
     pixelPos(hexPos) {
         return [
-            this.center_x + this.hexSide * 1.5 * (hexPos[0] - Math.floor(this.boardHexCount / 2)),
-            this.center_y + this.hexHeight * (hexPos[1] - Math.floor(this.boardHexCount / 2) + Math.abs(hexPos[0] - Math.floor(this.boardHexCount / 2)) / 2.0)
+            this.center_x + this.hexSide * 1.5 * (hexPos[0] - Math.floor(this.boardSize / 2)),
+            this.center_y + this.hexHeight * (hexPos[1] - Math.floor(this.boardSize / 2) + Math.abs(hexPos[0] - Math.floor(this.boardSize / 2)) / 2.0)
         ];
     }
     
     hexPos(pixelPos) {
-        const hpos = Math.round((pixelPos[0] - this.center_x) / (this.hexSide * 1.5) + Math.floor(this.boardHexCount / 2));
-        const vpos = Math.round((pixelPos[1] - this.center_y) / this.hexHeight + Math.floor(this.boardHexCount / 2) - Math.abs(hpos - Math.floor(this.boardHexCount / 2)) / 2);
-        if (0 <= hpos && hpos < this.boardHexCount && 0 <= vpos && vpos < this.boardHexCount) {
+        const hpos = Math.round((pixelPos[0] - this.center_x) / (this.hexSide * 1.5) + Math.floor(this.boardSize / 2));
+        const vpos = Math.round((pixelPos[1] - this.center_y) / this.hexHeight + Math.floor(this.boardSize / 2) - Math.abs(hpos - Math.floor(this.boardSize / 2)) / 2);
+        if (0 <= hpos && hpos < this.boardSize && 0 <= vpos && vpos < this.boardSize) {
             return [hpos, vpos];
         } else {
             return null;
         }
     }
-    
+    get hexCount() {
+        return 3*this.boardSize*(this.boardSize-1)+1
+    }
     /**
      * 
      * @param {[number, number]} hexPos 
+     * @yields {TerrainHex}
      */
     *neighborIter(hexPos) {
-        const yOffsetLeft = hexPos[0] <= Math.floor(this.boardHexCount / 2)?1:0;
-        const yOffsetRight = hexPos[0] >= Math.floor(this.boardHexCount / 2)?1:0;
+        const yOffsetLeft = hexPos[0] <= Math.floor(this.boardSize / 2)?1:0;
+        const yOffsetRight = hexPos[0] >= Math.floor(this.boardSize / 2)?1:0;
         const offsets = [
             [0, -1],
             [0, +1],
@@ -483,9 +810,8 @@ class Board extends Widget {
         for (let offset of offsets) {
             const x = hexPos[0] + offset[0];
             const y = hexPos[1] + offset[1];
-            if (this.terrain && this.terrain.at(x,y)) {
-                yield this.terrain.at(x,y);
-            }
+            const t = this._terrainMap.at(x,y);
+            if (t) yield t;
         }
     }
     
@@ -501,25 +827,25 @@ class Board extends Widget {
 
     layoutChildren() {
         this.hexSide = Math.min(
-            this.w / (1.5 * this.boardHexCount + 1),
-            0.95 * this.h / (this.boardHexCount * Math.sqrt(3))
+            this.w / (1.5 * this.boardSize + 1),
+            0.95 * this.h / (this.boardSize * Math.sqrt(3))
         );
         this.hexWidth = this.hexSide * 2;
         this.hexHeight = this.hexSide * Math.sqrt(3);
-        this.boardHeight = this.hexHeight * this.boardHexCount;
-        this.boardWidth = this.hexSide * (1.5 * this.boardHexCount + 1);
+        this.boardHeight = this.hexHeight * this.boardSize;
+        this.boardWidth = this.hexSide * (1.5 * this.boardSize + 1);
     
-        if (this.terrain !== null) {
-            for (let x = 0; x < this.boardHexCount; x++) {
-                let yHeight = this.boardHexCount - Math.abs(Math.floor((this.boardHexCount - 1) / 2) - x);
-                for (let y = 0; y < yHeight; y++) {
-                    let center = this.pixelPos([x, y]);
-                    let thex = this.terrain.at(x, y)
+        for (let x = 0; x < this.boardSize; x++) {
+            let yHeight = this.boardSize - Math.abs(Math.floor((this.boardSize - 1) / 2) - x);
+            for (let y = 0; y < yHeight; y++) {
+                let center = this.pixelPos([x, y]);
+                let thex = this._terrainMap.at(x, y);
+                if(thex) {
                     thex.w = this.hexWidth;
                     thex.h = this.hexWidth;
                     thex.center_x = center[0];
                     thex.center_y = center[1];
-                    thex.layoutChildren();
+                    thex.layoutChildren();    
                 }
             }
         }
@@ -570,14 +896,15 @@ class GameScreen extends Widget {
     
     /**
      * 
-     * @param {TerrainHex} terrain 
+     * @param {TerrainHex} thex 
      * @param {boolean} serverCheck 
      * @returns 
      */
-    placeTile(terrain, serverCheck = true) {
+    placeTile(thex, serverCheck = true) {
         if (!this.gameOver && this.selectedTile !== null) {
-            const hexPos = terrain.hexPos;
-            if (this.board.terrain?.at(...hexPos).tile !== null) {
+            const hexPos = thex.hexPos;
+            const t = this.board.terrainMap.at(...hexPos);
+            if (t===undefined || t.tile !== null) {
                 return;
             }
             const centerPos = this.board.pixelPos(hexPos);
@@ -586,13 +913,13 @@ class GameScreen extends Widget {
             if (index > -1) {
                 this.selectableTiles.splice(index, 1);
             }
-            terrain.tile = this.selectedTile;
+            thex.tile = this.selectedTile;
             this.clearPlacementTargets();
             this.players[this.activePlayer].placedTiles.push(this.selectedTile);
             this.selectedTile.selectablePos = -1;
             this.selectedTile.bgColor = null;
             this.selectedTile = null;
-            this.updateScores(terrain);
+            this.updateScores(thex);
             this.drawNewTile();
             this.nextPlayer();
         }
@@ -701,9 +1028,9 @@ class GameScreen extends Widget {
     setPlacementTargets(tile) {
         this.clearPlacementTargets();
         let player = this.players[this.activePlayer];
-        if(!this.board.terrain) return;
+        if(!this.board.terrainMap) return;
         let targets = [];
-        for(let thex of this.board.terrain.iter()) {
+        for(let thex of this.board.terrainMap.iter()) {
             if(thex.tile!==null) continue;
             if(!this.hasNeighbor(player, thex)) continue;
             if(tile.scoreTerrain[thex.code]===null) continue;
@@ -748,7 +1075,7 @@ class GameScreen extends Widget {
     }
 
     clearLevel() {
-        this.board.clearTerrain();
+        this.board.makeTerrain(null);
         for (let st of this.selectableTiles) {
             this.removeChild(st);
         }
@@ -777,12 +1104,14 @@ class GameScreen extends Widget {
         let startTile = new tileDict[this.level.startTile]();
         startTile.hexPos = this.level.start;
         this.addChild(startTile);
-        if(this.board.terrain && this.level) {
-            let terr = this.board.terrain.at(this.level.start[0], this.level.start[1]);
-            terr.tile = startTile;
-            this.players[this.activePlayer].placedTiles.push(startTile);
-            this.scoreTile(terr);
-            this.updateScores();
+        if(this.board.terrainMap && this.level) {
+            let terr = this.board.terrainMap.at(this.level.start[0], this.level.start[1]);
+            if(terr) {
+                terr.tile = startTile;
+                this.players[this.activePlayer].placedTiles.push(startTile);
+                this.scoreTile(terr);
+                this.updateScores();                    
+            }
         }
     }
 
@@ -801,19 +1130,19 @@ class GameScreen extends Widget {
         // This code could be simplified as the values are the same for every condition, 
         // but I'm keeping it to retain the structure in case you want to change values for specific conditions later.
         if (playerSpec.length === 1) {
-            this.board.boardHexCount = 9;
+            this.board.boardSize = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 2) {
-            this.board.boardHexCount = 9;
+            this.board.boardSize = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 3) {
-            this.board.boardHexCount = 9;
+            this.board.boardSize = 9;
             this.tilesCount = 24;
         } else if (playerSpec.length === 4) {
-            this.board.boardHexCount = 9;
+            this.board.boardSize = 9;
             this.tilesCount = 24;
         } else { // Assuming 5 or more
-            this.board.boardHexCount = 9;
+            this.board.boardSize = 9;
             this.tilesCount = 24;
         }
         
@@ -941,7 +1270,6 @@ class GameScreen extends Widget {
         this.applyHints(this.wStateLabel);
         this.wStateLabel.layoutChildren();
         this._needsLayout = false;
-        console.log("Layout")
     }
 }
 
