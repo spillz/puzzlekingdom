@@ -1,0 +1,24 @@
+{
+  "name": "puzzlekingdom",
+  "version": "0.1.0",
+  "description": "A puzzling, tile laying city building game",
+  "main": "index.html",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spillz/puzzlekingdom.git"
+  },
+  "author": "Damien Moore",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/spillz/puzzlekingdom/issues"
+  },
+  "homepage": "https://github.com/spillz/puzzlekingdom#readme",
+  "devDependencies": {
+    "vite": "^5.2.11"
+  }
+}

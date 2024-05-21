@@ -2,10 +2,66 @@
 
 import  {App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math, rand} from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
 import { colorString } from '../eskv/lib/modules/math.js';
-import { getRandomInt } from '../eskv/lib/modules/random.js';
 
 rand.setPRNG('jsf32');
 rand.setSeed(Date.now());
+
+//@ts-ignore
+import urlTerrainPlain from './tiles/terrain_plain.png';
+//@ts-ignore
+import urlTerrainForest from './tiles/terrain_forest.png';
+//@ts-ignore
+import urlTerrainMountain from './tiles/terrain_mountain.png';
+//@ts-ignore
+import urlTerrainWater from './tiles/terrain_water.png';
+//@ts-ignore
+import urlTerrainWaterEdgeN from './tiles/terrain_water_edge_n.png';
+//@ts-ignore
+import urlTerrainWaterEdgeNe from './tiles/terrain_water_edge_ne.png';
+//@ts-ignore
+import urlTerrainWaterEdgeSe from './tiles/terrain_water_edge_se.png';
+//@ts-ignore
+import urlTerrainWaterEdgeS from './tiles/terrain_water_edge_s.png';
+//@ts-ignore
+import urlTerrainWaterEdgeSw from './tiles/terrain_water_edge_sw.png';
+//@ts-ignore
+import urlTerrainWaterEdgeNw from './tiles/terrain_water_edge_nw.png';
+//@ts-ignore
+import urlTileCastle from './tiles/tile_castle.png';
+//@ts-ignore
+import urlTileVillage from './tiles/tile_village.png';
+//@ts-ignore
+import urlTileAbbey from './tiles/tile_abbey.png';
+//@ts-ignore
+import urlTileFarm from './tiles/tile_farm.png';
+//@ts-ignore
+import urlTileMine from './tiles/tile_mine.png';
+//@ts-ignore
+import urlTileStronghold from './tiles/tile_stronghold.png';
+//@ts-ignore
+import urlTileTradeship from './tiles/tile_tradeship.png';
+
+// Load Images function
+const terrainImages = {
+    'p': urlTerrainPlain,
+    'f': urlTerrainForest,
+    'm': urlTerrainMountain,
+    'w': urlTerrainWater,
+    '1': urlTerrainWaterEdgeN,
+    '2': urlTerrainWaterEdgeNe,
+    '3': urlTerrainWaterEdgeSe,
+    '4': urlTerrainWaterEdgeS,
+    '5': urlTerrainWaterEdgeSw,
+    '6': urlTerrainWaterEdgeNw,
+    'C': urlTileCastle,
+    'V': urlTileVillage,
+    'A': urlTileAbbey,
+    'F': urlTileFarm,
+    'M': urlTileMine,
+    'S': urlTileStronghold,
+    'T': urlTileTradeship,
+};
+
 
 /*
 New gameplay idea (potentially replaces the current complicated and somewhat boring adjacency scoring fest)
@@ -30,8 +86,8 @@ Village: place on pasture/mountain/forest; provides 1 worker for each adjacent b
 Mine: provides 1 coin for it's space and each adjacent mountain space.
 Stronghold: provides military strength for each surplus worker.
 Castle: provides 1 governance action at end of current round (or immediately?).
-Abbey: grants +1 effectiveness to adjacent farm, village and mine. When placed, enhances 1 building at end of current round.
-Tradeship: placed on water tile -- grants access to all connected land. During activation, spend coin for food/workers
+Abbey: grants +1 effectiveness to an adjacent farm, village or mine. When placed, enhances 1 building at end of current round.
+Tradeship: placed on water tile -- grants access to all connected land within a certain range. During activation, spend coin for food/workers
 
 */
 
@@ -156,7 +212,7 @@ class TMap extends Map {
     /**
      * 
      * @param {[number, number]} hexPos 
-     * @yields {TerrainHex}
+     * @returns {Generator<[number, number]>}
      */
     *neighborPositions(hexPos) {
         const xOffsetLeft = hexPos[1] <= Math.floor(this.mapSize / 2)?1:0;
@@ -179,7 +235,7 @@ class TMap extends Map {
     /**
      * 
      * @param {[number, number]} hexPos 
-     * @yields {TerrainHex}
+     * @returns {Generator<string|undefined>}
      */
     *neighborIter(hexPos) {
         const xOffsetLeft = hexPos[1] <= Math.floor(this.mapSize / 2)?1:0;
@@ -267,7 +323,7 @@ class RandomLevel extends Level {
             const countWater = adjacencies.reduce((prev, cur)=>cur==='w'?prev+1:prev, 0);
             const extras = adjacencies.filter((val)=>val!=='w');
             const atEdge = tmap.hasEdge(position);
-            let placements = [...basePlacementSet, ...extras];
+            let placements = [...basePlacementSet, ...extras, ...extras];
             if(countWater===1 && !atEdge) placements = ['w'];
             const terrain = rand.choose(placements);
             tmap.put(position, terrain);
@@ -297,33 +353,12 @@ class RandomLevel extends Level {
         if(waterCount>5) tileSet+='T';
         else tileSet += rand.choose(['C','V','A','F','S'])
         this.tileSet = tileSet;
-        //TODO: x,y here are the opposite of how they are presented in the UI.
+        //TODO: x,y here are the opposite of how they are presented in the UI so we reverse them
         this.start = [startPos[1], startPos[0]];
     }
 }
 
 var levels = [new RandomLevel(9)];
-
-// Load Images function
-const terrainImages = {
-    'p': 'tiles/terrain_plain.png',
-    'f': 'tiles/terrain_forest.png',
-    'm': 'tiles/terrain_mountain.png',
-    'w': 'tiles/terrain_water.png',
-    '1': 'tiles/terrain_water_edge_n.png',
-    '2': 'tiles/terrain_water_edge_ne.png',
-    '3': 'tiles/terrain_water_edge_se.png',
-    '4': 'tiles/terrain_water_edge_s.png',
-    '5': 'tiles/terrain_water_edge_sw.png',
-    '6': 'tiles/terrain_water_edge_nw.png',
-    'C': 'tiles/tile_castle.png',
-    'V': 'tiles/tile_village.png',
-    'A': 'tiles/tile_abbey.png',
-    'F': 'tiles/tile_farm.png',
-    'M': 'tiles/tile_mine.png',
-    'S': 'tiles/tile_stronghold.png',
-    'T': 'tiles/tile_tradeship.png',
-};
 
 
 // Color Average function
@@ -547,6 +582,7 @@ class Farm extends Tile {
 class TargetTile extends Label {
     score = 0;
     code = '*';
+    hexPos = [0,0];
     constructor(props) {
         super();        
         this.updateProperties(props)
@@ -558,7 +594,7 @@ class TargetTile extends Label {
         this.color = this.score>0?'rgba(60,40,0,0.85)':
                     this.score===0?'rgba(20,20,20,0.85)':
                     'rgba(72,32,29,0.85)';
-}
+    }
     draw(app, ctx) {
         ctx.beginPath();
         ctx.arc(this.center_x, this.center_y, this.w/3, 0, 2*Math.PI);
@@ -583,66 +619,6 @@ const tileDict = {
     'A': Abbey,
     'F': Farm,
 };
-
-class TerrainMap extends Array {
-    /**
-     * 
-     * @param {Level|null} level 
-     * @param {number} size 
-     */
-    constructor(level, size) {
-        super(); //total number of cells in the x direction
-        for(let i=0; i<size; ++i) {
-            this.push([]);
-        }
-        this.size = size;
-        let i = 0;
-        let terrainmap;
-        if(level===null) {
-            terrainmap = new EmptyLevel().map.replace(/\n/g, '').replace(/ /g, '');
-        } else {
-            terrainmap = level.map.replace(/\n/g, '').replace(/ /g, '');
-        }
-        for (let x = 0; x < this.size; x++) {
-            let yHeight = this.size - Math.abs((this.size - 1) / 2 - x);
-            for (let y = 0; y < yHeight; y++) {
-                let ht = new terrainClass[terrainmap[i]]({hexPos: [x, y]});
-                this[x].push(ht);
-                i++;
-            }
-        }
-    }
-    /**
-     * @yields {TerrainHex}
-     */
-    *iter() {
-        for(let a of this) {
-            for (let hex of a) {
-                yield hex;
-            }
-        }
-    }
-    /**
-     * @param {number} x 
-     * @param {number} y
-     * @returns {TerrainHex|undefined}
-     */
-    at(x, y) {
-        try {
-            return this[x][y];
-        } catch(error) {
-            return undefined;
-        }
-    }
-    /**
-     * @param {number} x 
-     * @param {number} y
-     * @param {TerrainHex} terrain
-     */
-    set(x, y, terrain) {
-        this[x][y] = terrain;
-    }
-}
 
 class TerrainHex extends ImageWidget {
     code = '';
@@ -721,6 +697,70 @@ const terrainClass = {
     'm': Mountain,
     'w': Water
 };
+
+/**
+ * @extends {Array<Array<TerrainHex>>}
+ */
+class TerrainMap extends Array {
+    /**
+     * 
+     * @param {Level|null} level 
+     * @param {number} size 
+     */
+    constructor(level, size) {
+        super(); //total number of cells in the x direction
+        for(let i=0; i<size; ++i) {
+            this.push([]);
+        }
+        this.size = size;
+        let i = 0;
+        let terrainmap;
+        if(level===null) {
+            terrainmap = new EmptyLevel().map.replace(/\n/g, '').replace(/ /g, '');
+        } else {
+            terrainmap = level.map.replace(/\n/g, '').replace(/ /g, '');
+        }
+        for (let x = 0; x < this.size; x++) {
+            let yHeight = this.size - Math.abs((this.size - 1) / 2 - x);
+            for (let y = 0; y < yHeight; y++) {
+                let ht = new terrainClass[terrainmap[i]]({hexPos: [x, y]});
+                this[x].push(ht);
+                i++;
+            }
+        }
+    }
+    /**
+     * @yields {TerrainHex}
+     */
+    *iter() {
+        for(let a of this) {
+            for (let hex of a) {
+                yield hex;
+            }
+        }
+    }
+    /**
+     * 
+     * @param {number} x 
+     * @param {number} y 
+     */
+    at(x, y) {
+        try {
+            return this[x][y];
+        } catch(error) {
+            return undefined;
+        }
+    }
+    /**
+     * @param {number} x 
+     * @param {number} y
+     * @param {TerrainHex} terrain
+     */
+    set(x, y, terrain) {
+        this[x][y] = terrain;
+    }
+}
+
 
 // class ScoreBoard extends BoxLayout {
 
@@ -861,7 +901,8 @@ class GameScreen extends Widget {
         this.level = null;
         this.tiles = [];
         this.selectableTiles = [];
-        this.placementTargets = [];
+        this.placementLayer = new Widget({hints:{x:0,y:0,w:1,h:1}});
+        this.addChild(this.placementLayer);
         this.tileStack = [];
         this.selectedTile = null;
         this.activePlayer = 0;
@@ -1052,17 +1093,11 @@ class GameScreen extends Widget {
             targets.push(tt);
 
         }
-        this.placementTargets = targets;
-        for(let c of targets) {
-            this.addChild(c);
-        }
+        this.placementLayer.children = targets;
     }
 
     clearPlacementTargets() {
-        for(let c of this.placementTargets) {
-            this.removeChild(c)
-        }
-        this.placementTargets = [];
+        this.placementLayer.children = [];
     }
 
     removePlayers() {
@@ -1242,7 +1277,7 @@ class GameScreen extends Widget {
             p.boardResize(hexSide);
         }    
 
-        for (let tt of this.placementTargets) {
+        for (let tt of /**@type {TargetTile[]}*/(this.placementLayer.children)) {
             let hp = this.board.pixelPos(tt.hexPos);
             tt.w = hexSide * 2,
             tt.h = hexSide * 2,
