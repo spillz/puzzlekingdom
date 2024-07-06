@@ -526,6 +526,7 @@ function blessed(board, hexPos) {
 
 class Castle extends Tile {
     code = /**@type {TileType} */('C');
+    name = 'Castle';
     cost = /**@type {Object<ResourceType, number>} */({'rw':5, 'rm':2});
     placeTerrain = {'p': 0, 'f': 0, 'm': 0, 'w': null};
     tileColor = 'purple';
@@ -539,6 +540,7 @@ class Castle extends Tile {
 
 class Village extends Tile {
     code = /**@type {TileType}*/('V');
+    name = 'Village';
     placeTerrain = {'p': 1, 'f': 1, 'm': 0, 'w': null};
     cost =/**@type {Object<ResourceType, number>} */({'rw':2, 'rm':0});
     tileColor = 'yellow';
@@ -563,6 +565,7 @@ class Village extends Tile {
 
 class Stronghold extends Tile {
     code = /**@type {TileType}*/('S');
+    name = 'Stronghold';
     placeTerrain = {'p': 1, 'f': 0, 'm': 1, 'w': null};
     cost =/**@type {Object<ResourceType, number>} */({'rw':3, 'rm':1});
     tileColor = 'red';
@@ -577,6 +580,7 @@ class Stronghold extends Tile {
 
 class Mine extends Tile {
     code = /**@type {TileType}*/('M');
+    name = 'Mine';
     placeTerrain = {'p': 1, 'f': 0, 'm': 2, 'w': null};
     cost =/**@type {Object<ResourceType, number>} */({'rw':3, 'rm':0});
     tileColor = 'grey';
@@ -606,6 +610,7 @@ class Mine extends Tile {
 
 class Tradeship extends Tile {
     code = /**@type {TileType}*/('T');
+    name = 'Tradeship';
     placeTerrain = {'p': null, 'f': null, 'm': null, 'w': 2};
     cost =/**@type {Object<ResourceType, number>} */({'rw':5, 'rm':0});
     tileColor = colorString([0.4, 0.2, 0.2, 1.0]);
@@ -632,6 +637,7 @@ class Tradeship extends Tile {
 
 class Abbey extends Tile {
     code = /**@type {TileType}*/('A');
+    name = 'Abbey';
     placeTerrain = {'p': 1, 'f': 1, 'm': 1, 'w': null};
     cost =/**@type {Object<ResourceType, number>} */({'rw':5, 'rm':0});
     tileColor = colorString([0.7, 0.4, 0.4, 1.0]);
@@ -645,6 +651,7 @@ class Abbey extends Tile {
 
 class Farm extends Tile {
     code = /**@type {TileType}*/('F');
+    name = 'Farm';
     placeTerrain = {'p': 2, 'f': 1, 'm': null, 'w': null};
     cost =/**@type {Object<ResourceType, number>} */({'rw':1, 'rm':0});
     tileColor = colorString([0.2, 0.5, 0.2, 1.0]);
@@ -1369,7 +1376,7 @@ class GameScreen extends Widget {
     selectTile(e, o, v) {
         if(this.actionBar.children.length>3) {
             if(v) {
-                this.wStateLabel.text = 'Place '+v.code;
+                this.wStateLabel.text = 'Place '+v.name;
                 this.setPlacementTargets(v.code);
             } else {
                 this.wStateLabel.text = 'Select tile';
