@@ -559,7 +559,7 @@ class Village extends Tile {
                 workers+=1;
             }
         }
-        return Production.from({'rw':workers+blessed(board, hexPos)});
+        return Production.from({'rw':workers*(1+blessed(board, hexPos))});
     }
 }
 
@@ -604,7 +604,7 @@ class Mine extends Tile {
                 }
             }
         }
-        return Production.from({'rm':gold+blessed(board, hexPos)});
+        return Production.from({'rm':gold*(1+blessed(board, hexPos))});
     }
 }
 
@@ -675,7 +675,7 @@ class Farm extends Tile {
                 if(t instanceof Plain) food+=1;
             }
         }
-        return Production.from({'rf':food+blessed(board, hexPos)});
+        return Production.from({'rf':food*(1+blessed(board, hexPos))});
     }
 }
 
@@ -1243,7 +1243,7 @@ class GameScreen extends Widget {
             sm.turn--;
             this.resourceTracker.produceResources();
             sm.score = this.resourceTracker.get('rm').amount;
-            this.actionBar.children = [new Farm(), new Village(), new Mine(), new Abbey(), new Tradeship(), new Castle()];
+            this.actionBar.children = [new Farm(), new Village(), new Mine(), new Abbey(), new Tradeship(), new Stronghold(), new Castle()];
             if(sm.turn==1) {
                 this.nextButton.text = 'End game';
             }
@@ -1349,29 +1349,6 @@ class GameScreen extends Widget {
         return walk(terrain, this.board);
     }
 
-    // /**
-    //  * 
-
-
-
-    
-    //  * @param {Tile} tile 
-    //  * @param {Touch} touch 
-    //  * @returns 
-    //  */
-    // onTouchDownTile(tile, touch) {
-    //     if (this.gameOver) return true;
-    //     if (tile.hexPos[0] !== -1 && tile.hexPos[1] !== -1) return false;
-    //     const p = this.players[this.activePlayer];
-    //     if (!p.localControl) return true;
-    //     else {
-    //         this.wStateLabel.text = 'Place tile';
-    //         this.wStateLabel.color = p.color; // colorAverage([1,1,1,1], p.color);
-    //         this.setPlacementTargets(tile);
-    //     }
-    //     return this.selectTile(tile);
-    // }
-
     /**@type {import('../eskv/lib/modules/widgets.js').EventCallbackNullable} */
     selectTile(e, o, v) {
         if(this.actionBar.children.length>3) {
@@ -1379,7 +1356,7 @@ class GameScreen extends Widget {
                 this.wStateLabel.text = 'Place '+v.name;
                 this.setPlacementTargets(v.code);
             } else {
-                this.wStateLabel.text = 'Select tile';
+                this.wStateLabel.text = 'Select a building type';
                 this.clearPlacementTargets();
             }    
         } else {
@@ -1451,10 +1428,6 @@ class GameScreen extends Widget {
 
     clearLevel() {
         this.board.makeTerrain(levels[0]);
-        // for (let st of this.selectableTiles) {
-        //     this.removeChild(st);
-        // }
-        // this.selectableTiles = [];
     }
     /**
      * @param {Level|null} level 
@@ -1471,7 +1444,6 @@ class GameScreen extends Widget {
         this.tileStack = [...this.level.tileSet].map(t => new tileClasses[t]());
         this.tileStack.sort(() => Math.random() - 0.5);
         let startTile = new tileClasses[this.level.startTile]();
-        // startTile.hexPos = this.level.start;
 
         if(this.board.terrainMap && this.level) {
             let terr = this.board.terrainMap.atPos(this.level.start[0], this.level.start[1]);
@@ -1484,8 +1456,8 @@ class GameScreen extends Widget {
         this.actionBar.addChild(new Mine());
         this.actionBar.addChild(new Abbey());
         this.actionBar.addChild(new Tradeship());
+        this.actionBar.addChild(new Stronghold());
         this.actionBar.addChild(new Castle());
-
     }
 
     /**
