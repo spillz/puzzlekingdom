@@ -20,7 +20,7 @@ export default {
     ],
     base: './',
     build: {
-      target: 'es2022', //es2019
-      minify: true,
+      target: 'es2019', //es2019
+      minify: false,
     }
 };

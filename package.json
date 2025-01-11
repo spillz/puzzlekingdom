@@ -4,7 +4,7 @@
   "description": "A puzzling, tile laying city building game",
   "main": "index.html",
   "scripts": {
-    "start": "vite",
+    "dev": "vite",
     "build": "vite build",
     "serve": "vite preview"
   },
