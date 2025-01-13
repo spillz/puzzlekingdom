@@ -570,6 +570,7 @@ class Tile extends ImageWidget {
     hexPos = [-1, -1];
     tileColor = 'blue';
     textColor = 'white';
+    prodBonus = 0;
     score = 0;
     damaged = false;
     /**@type {Object<TerrainType, number|null>} */
@@ -598,6 +599,7 @@ class Tile extends ImageWidget {
      * @param {Board} board;
      */
     place(terr, centerPos, player, board) {
+        terr.tile = this;
         this.hexPos = [terr.hexPos[0], terr.hexPos[1]];
         if (centerPos !== null) {
             let a = new WidgetAnimation();
@@ -717,7 +719,7 @@ class Castle extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'ri': 1 });
+        return ProductionQuantity.from({ 'ri': 1 + this.prodBonus});
     }
     get needs() {
         return ProductionQuantity.from({ 'rw': 1, 'rf': 1, 'rb': 1 });
@@ -762,7 +764,7 @@ class Village extends Tile {
     }
     get productionCapacity() {
         const blessed = this.needsFilled.get('rb') ? 2 : 1;
-        return ProductionQuantity.from({ 'rw': 2 * blessed });
+        return ProductionQuantity.from({ 'rw': 2 * blessed + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'rf': 1, 'rb': 0 });
@@ -782,7 +784,7 @@ class Stronghold extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'rs': 1 });
+        return ProductionQuantity.from({ 'rs': 1 + this.prodBonus});
     }
     get needs() {
         return ProductionQuantity.from({ 'ro': 1, 'rw': 1 });
@@ -801,7 +803,7 @@ class Mine extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'ro': 3 });
+        return ProductionQuantity.from({ 'ro': 1 + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'rw': 1 });
@@ -822,7 +824,7 @@ class Tradeship extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'rm': 1 });
+        return ProductionQuantity.from({ 'rm': 1 + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'rw': 1 });
@@ -857,7 +859,7 @@ class Tradeship extends Tile {
 class Abbey extends Tile {
     code = /**@type {TileType}*/('A');
     name = 'Abbey';
-    terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
+    terrainPlacement = { 'p': 0, 'f': 1, 'm': 2, 'w': null };
     tileColor = colorString([0.7, 0.4, 0.4, 1.0]);
     textColor = 'white';
     constructor(props = {}) {
@@ -866,7 +868,7 @@ class Abbey extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'rb': 6 });
+        return ProductionQuantity.from({ 'rb': 3 + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'rw': 1, 'rf': 1 });
@@ -887,9 +889,9 @@ class Farm extends Tile {
     get productionCapacity() {
         const blessed = this.needsFilled.get('rb') ? 2 : 1;
         if (this.parent instanceof Forest) {
-            return ProductionQuantity.from({ 'rf': 2 * blessed, 'rt': 2 * blessed });
+            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus, 'rt': 2 * blessed});
         } else {
-            return ProductionQuantity.from({ 'rf': 2 * blessed });
+            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus });
         }
     }
     get needs() {
@@ -1212,7 +1214,7 @@ class TileInfo extends Widget {
                 orientation: 'vertical',
                 children: [
                     new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${needsFilled.get(resourceType)??0}/${needs.get(resourceType)}`, hints: { h: 0.5 } })
+                    new Label({ text: `${needsFilled.get(resourceType)?.length??0}/${needs.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceInBox.children = riBoxChildren;
@@ -1225,7 +1227,7 @@ class TileInfo extends Widget {
                 orientation: 'vertical',
                 children: [
                     new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${prodRequested.get(resourceType)??0}/${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
+                    new Label({ text: `${prodRequested.get(resourceType)?.length??0}/${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceOutBox.children = roBoxChildren;
@@ -1636,21 +1638,38 @@ class GameScreen extends Widget {
         }
     }
 
+
     /**
      * 
+     * @param {Player} player 
+     * @param {TerrainHex} terr
+     * @returns 
+     */
+    removeTileFromTerrain(player, terr) {
+        const tile = terr.tile;
+        terr.tile = null;
+        for(let p of this.players) {
+            p.placedTiles = p.placedTiles.filter(t0=>t0!==tile);
+        }
+    }
+    /**
+     * 
+     * @param {Player} player 
      * @param {TerrainHex} thex 
      * @param {Tile} tile 
+     * @param {boolean} removeExisting
      * @param {boolean} serverCheck 
      * @returns 
      */
-    placeTile(thex, tile, advanceTurn = true, serverCheck = true) {
+    placeTile(player, thex, tile, removeExisting = false, advanceTurn = true, serverCheck = true) {
         const hexPos = thex.hexPos;
         const t = this.board.terrainMap.atPos(...hexPos);
-        if (t === undefined || t.tile !== null) {
-            return;
+        if (t === undefined) return false;
+        if (t.tile !== null) {
+            if (!removeExisting) return false;
+            this.removeTileFromTerrain(player, thex);
         }
-        if (tile.terrainPlacement[t.code] === null) return;
-        const player = this.players[this.activePlayer];
+        if (tile.terrainPlacement[t.code] === null) return false;
         /**@type {[number, number]|null} */
         const center = advanceTurn ? [thex.center_x, thex.center_y] : null;
         tile.place(thex, center, player, this.board);
@@ -1676,6 +1695,7 @@ class GameScreen extends Widget {
             this.clearPlacementTargets();
             // this.nextPlayer();
         }
+        return true;
     }
 
     /**
@@ -1688,9 +1708,9 @@ class GameScreen extends Widget {
         if (this.gameOver) return true;
         if (terrain.tile) {
             this.tileInfo.tile = terrain.tile;
-            const verb = terrain.tile.needsFilled.meets(terrain.tile.needs)?'Active':'Inactive';
+            const verb = !(terrain.tile instanceof Rubble) && terrain.tile.needsFilled.meets(terrain.tile.needs) ? 'Active' : 'Inactive';
             this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
-            return true;
+            if (!(terrain.tile instanceof Rubble)) return true;
         }
         if (this.actionBar.selectedTile === null) return true;
         const player = this.players[this.activePlayer];
@@ -1698,9 +1718,8 @@ class GameScreen extends Widget {
         const tile = this.actionBar.selectedTile;
         const tileToPlace = new tileClasses[tile.code]();
         if (!this.canReach(player, terrain)) return true;
-        // this.actionBar.removeChild(tile);
         this.actionBar.selectedTile = null;
-        return this.placeTile(terrain, tileToPlace);
+        return this.placeTile(player, terrain, tileToPlace, terrain.tile instanceof Rubble);
     }
 
     /**
@@ -1831,9 +1850,8 @@ class GameScreen extends Widget {
         let player = this.players[this.activePlayer];
         if (!this.board.terrainMap) return;
         let targets = [];
-        for (let thex of this.board.terrainMap.iter()) {
+        for (let thex of this.reachableTiles(player)) {
             if (thex.tile !== null) continue;
-            if (!this.canReach(player, thex)) continue;
             if (tile.terrainPlacement[thex.code] === null) continue;
             let prod = tile.productionRequested;
             let value = 0
@@ -1888,7 +1906,7 @@ class GameScreen extends Widget {
 
         if (this.board.terrainMap && this.level) {
             let terr = this.board.terrainMap.atPos(this.level.start[0], this.level.start[1]);
-            if (terr) this.placeTile(terr, startTile, false)
+            if (terr) this.placeTile(p, terr, startTile, false, false);
         }
 
         this.actionBar.addChild(new Farm());
@@ -1931,25 +1949,24 @@ class GameScreen extends Widget {
     }
 
     nextPlayer() {
-        if (this.activePlayer >= 0) {
+        if (this.activePlayer === 0) {
             this.players[this.activePlayer].endTurn(this);
             const player = this.players[this.activePlayer];
             for (let t of player.placedTiles) {
-                const res = t.productionRequested.get('rs');
-                if (t instanceof Stronghold && res !== undefined && res.length > 0) {
+                if (t instanceof Stronghold && t.needsFilled.meets(t.needs)) {
                     for (let terr of this.board.neighborIter(t.hexPos)) {
                         if (terr.tile instanceof EnemyDragon || terr.tile instanceof EnemyStronghold) {
                             terr.tile.health--;
                             if (terr.tile.health <= 0) {
-                                for (let op of this.players) {
-                                    if (op.placedTiles.includes(terr.tile)) {
-                                        op.placedTiles = op.placedTiles.filter((t) => t !== terr.tile);
-                                    }
-                                }
-                                new Rubble().place(terr, [...terr.hexPos], player, this.board);
+                                const otherPlayer = this.players[1];
+                                const rubble = new Rubble();
+                                this.placeTile(otherPlayer, terr, rubble, true, false);
                             }
                         }
                     }
+                }
+                if (t instanceof Castle && t.needsFilled.meets(t.needs)) {
+                    player.scoreMarker.score += 1;
                 }
             }
 
@@ -2089,7 +2106,7 @@ class PlayerScore extends Label {
     }
     updateStatus() {
         if (this.turn > 1) {
-            this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Turn: ${this.turn}/10 -- Score: ${this.score}`;
+            this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Turn: ${11-this.turn}/10 -- Score: ${this.score}`;
         } else if (this.turn === 1) {
             this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Last turn -- Score: ${this.score}`;
         } else {
@@ -2130,18 +2147,18 @@ class Player extends EventSink {
         this.reset();
         if (this.showScore) {
         }
-        for (let pt of this.placedTiles) {
-            this.screen.removeChild(pt);
-        }
+        // for (let pt of this.placedTiles) {
+        //     this.screen.removeChild(pt);
+        // }
         this.placedTiles = [];
     }
 
     reset() {
         this.scoreMarker.activeTurn = false;
         this.scoreMarker.score = 0;
-        for (let pt of this.placedTiles) {
-            this.screen.removeChild(pt);
-        }
+        // for (let pt of this.placedTiles) {
+        //     this.screen.removeChild(pt);
+        // }
         this.placedTiles = [];
     }
 
@@ -2186,14 +2203,12 @@ class EnemyPlayer extends Player {
      */
     startTurn(screen) {
         const board = screen.board;
+        const otherPlayer = screen.players[0];
         for (let t of this.placedTiles) {
             if (t instanceof EnemyStronghold) {
                 for (let terr of board.neighborIter(t.hexPos)) {
                     if (terr.tile instanceof Tile && !this.placedTiles.includes(terr.tile)) {
-                        terr.tile.damaged = true;
-                        terr.removeChild(terr.tile);
-                        terr.tile = new Rubble();
-                        terr.tile?.place(terr, null, this, board);
+                        screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
                         break;
                     }
                 }
@@ -2201,16 +2216,13 @@ class EnemyPlayer extends Player {
             else if (t instanceof EnemyDragon) {
                 for (let terr of board.neighborIter(t.hexPos)) {
                     if (terr.tile instanceof Tile && !this.placedTiles.includes(terr.tile)) {
-                        terr.tile.damaged = true;
-                        terr.removeChild(terr.tile);
-                        terr.tile = new Rubble();
-                        terr.tile?.place(terr, null, this, board);
+                        screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
                         break;
                     }
                 }
             }
         }
-        if (this.placedTiles.length < this.maxTiles) {
+        if (this.placedTiles.reduce((p,c)=>p+(c instanceof Rubble?0:1), 0) < this.maxTiles) {
             for (let terr of rand.shuffle([...board.terrainMap.iter()])) {
                 if (terr.tile === null) {
                     for (let adjTerr of board.neighborIter(terr.hexPos)) {
