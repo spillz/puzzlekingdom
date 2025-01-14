@@ -1837,25 +1837,29 @@ class GameScreen extends Widget {
             tile.productionFilled.clear();
         }
         let changes = true;
-        /**@type {Set<Tile>} */
-        const deactivated = new Set();
+        /**@type {Map<Tile, Set<Tile>>} */
+        const deactivatedConnections = new Map();
+        for (let t of placedTiles) {
+            deactivatedConnections.set(t, new Set());
+        }
         while (changes) {
             changes = false;
             //Figure out needs and production
             for (let tile of placedTiles) {
-                if (deactivated.has(tile)) continue; //Don't add deactivated tiles
                 let terr0 = this.board._terrainMap.atPos(tile.hexPos[0], tile.hexPos[1]);
                 if (terr0 === undefined) continue;
                 for (let terr of this.board.connectedIter(terr0, player, new Set([terr0]), new Set([terr0]))) {
                     const adjTile = terr.tile;
-                    if (adjTile) {
+                    const conn = /**@type {Set<Tile>}*/(deactivatedConnections.get(tile));
+                    if (adjTile!==null && !conn.has(adjTile)) {
                         for (let need of tile.needs.keys()) {
                             const neededAmt = tile.needs.get(need);
-                            const neededAmtFilled = tile.needsFilled.get(need);
+                            const neededAmtFilled = tile.needsFilled.get(need)??[];
                             if (neededAmt===undefined) continue;
-                            if (neededAmt===0 && neededAmtFilled?.length===1 || neededAmt>0 && neededAmtFilled?.length === neededAmt) continue;
+                            if (neededAmt===0 && neededAmtFilled.length===1 || neededAmt>0 && neededAmtFilled.length === neededAmt) continue;
                             if (!adjTile.productionCapacity.has(need)) continue;
                             const providedAmt = adjTile.productionCapacity.get(need);
+                            if (providedAmt === undefined) continue;
                             if (adjTile.productionFilled.get(need)?.length === providedAmt) continue;
                             // changes = true;
                             adjTile.productionFilled.addResource(need, tile);
@@ -1867,22 +1871,25 @@ class GameScreen extends Widget {
             // Now we remove needsFilled and productionRequested of the next tile lacking the needed resources or 
             // whose producer does not have the resource it needs to activate
             for (let tile of reversePlacedTiles) {
-                if (deactivated.has(tile)) {
-                    continue;
-                }
                 for (let need of tile.needsFilled.keys()) {
-                    const suppliers = tile.needsFilled.get(need);
-                    const activeSuppliers = suppliers?.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
-                    if (activeSuppliers !== undefined && activeSuppliers.length !== suppliers?.length) {
+                    const suppliers = tile.needsFilled.get(need)??[];
+                    const activeSuppliers = suppliers.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
+                    const inactiveSuppliers = suppliers.filter((sTile) => !sTile.needsFilled.meets(sTile.needs));
+                    if (inactiveSuppliers.length > 0) {
                         if (activeSuppliers.length > 0) {
                             tile.needsFilled.set(need, activeSuppliers);
                         } else {
                             tile.needsFilled.delete(need);
                         }
+                        for (let is of inactiveSuppliers) {
+                            deactivatedConnections.get(tile)?.add(is);
+                        }
+                        changes = true;
                     }
                 }
                 if (!tile.needsFilled.meets(tile.needs)) {
                     //Clear out the production link from tiles that are supplying this one
+                    //Some of these may come back on the next iteration except for the deactivateConnections
                     for (let n of tile.needsFilled.keys()) {
                         const nfts = tile.needsFilled.get(n);
                         if (nfts===undefined) continue;
@@ -1894,14 +1901,12 @@ class GameScreen extends Widget {
                                 } else {
                                     nft.productionFilled.delete(n);
                                 }
+                                // changes = true;
                             }
                         }
                     }
                     //Clear out the needsFilled and productionRequests of this tile
-                    deactivated.add(tile);
-                    tile.needsFilled.clear();
                     tile.productionFilled.clear();
-                    changes = true;
                     break;
                 }
             }    
