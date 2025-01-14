@@ -2331,7 +2331,7 @@ class EnemyPlayer extends Player {
         for (let t of this.placedTiles) {
             if (t instanceof EnemyStronghold) {
                 for (let terr of board.neighborIter(t.hexPos)) {
-                    if (terr.tile instanceof Tile && !this.placedTiles.includes(terr.tile)) {
+                    if (terr.tile instanceof Tile && !(terr.tile instanceof Rubble) && !this.placedTiles.includes(terr.tile)) {
                         screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
                         break;
                     }
@@ -2339,7 +2339,7 @@ class EnemyPlayer extends Player {
             }
             else if (t instanceof EnemyDragon) {
                 for (let terr of board.neighborIter(t.hexPos)) {
-                    if (terr.tile instanceof Tile && !this.placedTiles.includes(terr.tile)) {
+                    if (terr.tile instanceof Tile && !(terr.tile instanceof Rubble) && !this.placedTiles.includes(terr.tile)) {
                         screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
                         break;
                     }
