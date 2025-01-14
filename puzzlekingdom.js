@@ -1738,14 +1738,19 @@ class GameScreen extends Widget {
      */
     onTouchDownTerrain(terrain, touch) {
         if (this.gameOver) return true;
+        const player = this.players[this.activePlayer];
         if (terrain.tile) {
             this.tileInfo.tile = terrain.tile;
             const verb = !(terrain.tile instanceof Rubble) && terrain.tile.needsFilled.meets(terrain.tile.needs) ? 'Active' : 'Inactive';
             this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
+            //TODO: Here we want to highlight:
+            // * Input tiles
+            // * Output tiles
+            // * Terrain in this tile's network
+            this.setTileNetworkInfo(player, terrain);
             if (!(terrain.tile instanceof Rubble)) return true;
         }
         if (this.actionBar.selectedTile === null) return true;
-        const player = this.players[this.activePlayer];
         if (!player.localControl) return true;
         const tile = this.actionBar.selectedTile;
         const tileToPlace = new playerTileClasses[tile.code]();
@@ -1906,6 +1911,59 @@ class GameScreen extends Widget {
             // totalProd = totalProd.add(tile.productionRequested);
             tile.updateStatusIcons();
         }
+    }
+
+    /**
+     * 
+     * @param {Player} player 
+     * @param {TerrainHex} terrain 
+     */
+    setTileNetworkInfo(player, terrain) {
+        const tile = terrain.tile;
+        if (tile===null) {
+            this.placementLayer.children = [];
+            return;
+        }
+        /**@type {ImageWidget[]} */
+        const info = [];
+        for (let terr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
+            let placed = false;
+            if (terr.tile !== null) {
+                for (let n of tile.needsFilled.keys()) {
+                    if (tile.needsFilled.get(n)?.includes(terr.tile)) {
+                        info.push(new ImageWidget({
+                            src: gameImages[n],
+                            w: this.board.hexSide,
+                            h: this.board.hexSide,
+                            hexPos: terr.hexPos.slice(),
+                            bgColor: 'rgba(255,0,0,0.5)'
+                        }));
+                        placed = true;
+                    }
+                }
+                for (let n of tile.productionFilled.keys()) {
+                    if (tile.productionFilled.get(n)?.includes(terr.tile)) {
+                        info.push(new ImageWidget({
+                            src: gameImages[n],
+                            w: this.board.hexSide,
+                            h: this.board.hexSide,
+                            hexPos: terr.hexPos.slice(),
+                            bgColor: 'rgba(0,0,255,0.5)'
+                        }));
+                        placed = true;
+                    }
+                }
+                if (!placed) {
+                    info.push(new ImageWidget({
+                        w: this.board.hexSide,
+                        h: this.board.hexSide,
+                        hexPos: terr.hexPos.slice(),
+                        bgColor: 'rgba(128,128,128,0.5)'
+                    }));
+                }
+            }
+        }
+        this.placementLayer.children = info;
     }
 
     /**
@@ -2113,9 +2171,9 @@ class GameScreen extends Widget {
 
         for (let tt of /**@type {TargetTile[]}*/(this.placementLayer.children)) {
             let hp = this.board.pixelPos(tt.hexPos);
-            tt.w = hexSide * 2,
-                tt.h = hexSide * 2,
-                tt.center_x = hp[0];
+            tt.w = hexSide,
+            tt.h = hexSide,
+            tt.center_x = hp[0];
             tt.center_y = hp[1];
         }
 
