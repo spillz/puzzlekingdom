@@ -152,7 +152,7 @@ const tileNames = {
     M: 'mine',
     S: 'stronghold',
     // K: 'market',
-    T: 'port',
+    T: 'tradeship',
     X: 'rubble',
     ET: 'enemy tent',
     ES: 'enemy stronghold',
@@ -171,6 +171,23 @@ const resourceNames = {
     rb: 'blessings',
     ri: 'influence'
 };
+
+/**@type {Object<TileType|EnemyTileType, number>}} */
+const tilePriority = {
+    'ET': 11,
+    'ED': 10,
+    'ES': 9,
+    'EC': 8,
+    'R': 7,
+    'C': 6,
+    'T': 5,
+    'A': 4,
+    'S': 3,
+    'M': 2,
+    'V': 1,
+    'F': 0,
+}
+
 
 /**
  * @extends {Map<ResourceType, Tile[]>}
@@ -575,7 +592,7 @@ class Tile extends ImageWidget {
     damaged = false;
     /**@type {Object<TerrainType, number|null>} */
     terrainPlacement = {};
-    productionRequested = ProductionChain.from({});
+    productionFilled = ProductionChain.from({});
     needsFilled = ProductionChain.from({});
     constructor() {
         super({});
@@ -599,7 +616,6 @@ class Tile extends ImageWidget {
      * @param {Board} board;
      */
     place(terr, centerPos, player, board) {
-        terr.tile = this;
         this.hexPos = [terr.hexPos[0], terr.hexPos[1]];
         if (centerPos !== null) {
             let a = new WidgetAnimation();
@@ -655,11 +671,11 @@ class Tile extends ImageWidget {
         }
         if (needsFilled) {
             for (let n of this.productionCapacity.keys()) {
-                const color = this.productionRequested.get(n) !== this.productionCapacity.get(n) ?
+                const color = this.productionFilled.get(n) !== this.productionCapacity.get(n) ?
                     'rgba(0,80,0,0.6)' : 'rgba(0,0,60,0.6)';
-                const outline = this.productionRequested.get(n) !== this.productionCapacity.get(n) ?
+                const outline = this.productionFilled.get(n) !== this.productionCapacity.get(n) ?
                     'rgb(0,80,0)' : 'rgb(0,0,60)';
-                const connectedTiles = this.productionRequested.get(n);
+                const connectedTiles = this.productionFilled.get(n);
                 if (connectedTiles === undefined || connectedTiles.length !== this.productionCapacity.get(n)) {
                     const icon = new ImageWidget({
                         src: gameImages[n],
@@ -967,13 +983,12 @@ class TargetTile extends Label {
 }
 
 /**@type {Object<TileType, Tile>}} */
-const tileClasses = {
+const playerTileClasses = {
     'C': Castle,
     'V': Village,
     'S': Stronghold,
     'M': Mine,
     'T': Tradeship,
-    // 'K': Market,
     'A': Abbey,
     'F': Farm,
     'R': Rubble,
@@ -1222,7 +1237,7 @@ class TileInfo extends Widget {
 
             //Output resource status
             const prodCapacity = this.tile.productionCapacity;
-            const prodRequested = this.tile.productionRequested;
+            const prodRequested = this.tile.productionFilled;
             const roBoxChildren = [...prodCapacity.keys()].map((resourceType) => new BoxLayout({
                 orientation: 'vertical',
                 children: [
@@ -1387,16 +1402,16 @@ class Board extends Widget {
         if (terr.tile !== null && terr.tile instanceof Castle) {
             castles.add(terr);
         }
-        for (let t of this.neighborIter(terr.hexPos)) {
+        for (let t of this.connectedAdjecentPriority(terr)) {
             if (visited.has(t)) continue;
             yield t;
             visited.add(t);
         }
         //Adjacent tiles of adjacent own castles are also connected
-        for (let t of this.neighborIter(terr.hexPos)) {
+        for (let t of this.connectedAdjecentPriority(terr)) {
             if (t.tile && player.placedTiles.includes(t.tile)) {
                 if (t.tile instanceof Castle) {
-                    for (let tc of this.neighborIter(t.tile.hexPos)) {
+                    for (let tc of this.connectedAdjecentPriority(t)) {
                         if (visited.has(tc)) continue;
                         yield tc;
                         visited.add(tc);
@@ -1428,7 +1443,7 @@ class Board extends Widget {
                     if (visited.has(tn)) continue;
                     yield tn;
                     visited.add(tn);
-                    for (let tnAdj of this.neighborIter(tn.hexPos)) {
+                    for (let tnAdj of this.connectedAdjecentPriority(tn)) {
                         if (visited.has(tnAdj)) continue;
                         yield tnAdj
                         visited.add(tnAdj);
@@ -1438,6 +1453,22 @@ class Board extends Widget {
             }
         }
     }
+    /**
+     * 
+     * @param {TerrainHex} terr 
+     * @returns 
+     */
+    connectedAdjecentPriority(terr) {
+        let neighbors = [...this.neighborIter(terr.hexPos)];
+        neighbors.sort((a,b)=>{
+            if (a.tile===null && b.tile===null) return 0;
+            if (a.tile===null) return 100;
+            if (b.tile===null) return -100;
+            return tilePriority[a.tile.code]-tilePriority[b.tile.code]
+        });
+        return neighbors;
+    }
+
     /**
      * 
      * @param {[number, number]} hexPos 
@@ -1716,7 +1747,7 @@ class GameScreen extends Widget {
         const player = this.players[this.activePlayer];
         if (!player.localControl) return true;
         const tile = this.actionBar.selectedTile;
-        const tileToPlace = new tileClasses[tile.code]();
+        const tileToPlace = new playerTileClasses[tile.code]();
         if (!this.canReach(player, terrain)) return true;
         this.actionBar.selectedTile = null;
         return this.placeTile(player, terrain, tileToPlace, terrain.tile instanceof Rubble);
@@ -1791,15 +1822,22 @@ class GameScreen extends Widget {
         if (!player) return;
         // /**@type {ProductionChain} */
         // let totalProd = ProductionChain.from({});
+        const placedTiles = [...player.placedTiles];
+        placedTiles.sort((a,b)=>tilePriority[a.code]-tilePriority[b.code]);
+        const reversePlacedTiles = [...placedTiles];
+        reversePlacedTiles.reverse();
         for (let tile of player.placedTiles) {
             tile.needsFilled.clear();
-            tile.productionRequested.clear();
+            tile.productionFilled.clear();
         }
         let changes = true;
+        /**@type {Set<Tile>} */
+        const deactivated = new Set();
         while (changes) {
             changes = false;
             //Figure out needs and production
-            for (let tile of player.placedTiles) {
+            for (let tile of placedTiles) {
+                if (deactivated.has(tile)) continue; //Don't add deactivated tiles
                 let terr0 = this.board._terrainMap.atPos(tile.hexPos[0], tile.hexPos[1]);
                 if (terr0 === undefined) continue;
                 for (let terr of this.board.connectedIter(terr0, player, new Set([terr0]), new Set([terr0]))) {
@@ -1807,33 +1845,60 @@ class GameScreen extends Widget {
                     if (adjTile) {
                         for (let need of tile.needs.keys()) {
                             const neededAmt = tile.needs.get(need);
-                            if (tile.needsFilled.get(need)?.length === neededAmt) continue;
+                            const neededAmtFilled = tile.needsFilled.get(need);
+                            if (neededAmt===undefined) continue;
+                            if (neededAmt===0 && neededAmtFilled?.length===1 || neededAmt>0 && neededAmtFilled?.length === neededAmt) continue;
                             if (!adjTile.productionCapacity.has(need)) continue;
                             const providedAmt = adjTile.productionCapacity.get(need);
-                            if (adjTile.productionRequested.get(need)?.length === providedAmt) continue;
-                            changes = true;
-                            adjTile.productionRequested.addResource(need, tile);
+                            if (adjTile.productionFilled.get(need)?.length === providedAmt) continue;
+                            // changes = true;
+                            adjTile.productionFilled.addResource(need, tile);
                             tile.needsFilled.addResource(need, adjTile);
                         }
                     }
                 }
             }
-            //Now we remove needsFilled of tiles whose producer has not activated
-            for (let tile of player.placedTiles) {
+            // Now we remove needsFilled and productionRequested of the next tile lacking the needed resources or 
+            // whose producer does not have the resource it needs to activate
+            for (let tile of reversePlacedTiles) {
+                if (deactivated.has(tile)) {
+                    continue;
+                }
                 for (let need of tile.needsFilled.keys()) {
                     const suppliers = tile.needsFilled.get(need);
-                    const cappedSuppliers = suppliers?.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
-                    if (cappedSuppliers !== undefined && cappedSuppliers.length !== suppliers?.length) {
-                        changes = true;
-                        if (cappedSuppliers.length > 0) {
-                            tile.needsFilled.set(need, cappedSuppliers);
+                    const activeSuppliers = suppliers?.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
+                    if (activeSuppliers !== undefined && activeSuppliers.length !== suppliers?.length) {
+                        if (activeSuppliers.length > 0) {
+                            tile.needsFilled.set(need, activeSuppliers);
                         } else {
                             tile.needsFilled.delete(need);
                         }
                     }
                 }
-            }
-
+                if (!tile.needsFilled.meets(tile.needs)) {
+                    //Clear out the production link from tiles that are supplying this one
+                    for (let n of tile.needsFilled.keys()) {
+                        const nfts = tile.needsFilled.get(n);
+                        if (nfts===undefined) continue;
+                        for (let nft of nfts) {
+                            const prods = nft.productionFilled.get(n);
+                            if (prods!==undefined) {
+                                if (prods.length>1) {
+                                    nft.productionFilled.set(n, prods.filter((p)=>p!==tile));
+                                } else {
+                                    nft.productionFilled.delete(n);
+                                }
+                            }
+                        }
+                    }
+                    //Clear out the needsFilled and productionRequests of this tile
+                    deactivated.add(tile);
+                    tile.needsFilled.clear();
+                    tile.productionFilled.clear();
+                    changes = true;
+                    break;
+                }
+            }    
         }
 
         for (let tile of player.placedTiles) {
@@ -1845,15 +1910,15 @@ class GameScreen extends Widget {
     /**
      * @param {TileType} tileType */
     setPlacementTargets(tileType) {
-        const tile = new tileClasses[tileType]();
+        const tile = new playerTileClasses[tileType]();
         this.clearPlacementTargets();
         let player = this.players[this.activePlayer];
         if (!this.board.terrainMap) return;
         let targets = [];
         for (let thex of this.reachableTiles(player)) {
-            if (thex.tile !== null) continue;
+            if (thex.tile !== null && !(thex.tile instanceof Rubble)) continue;
             if (tile.terrainPlacement[thex.code] === null) continue;
-            let prod = tile.productionRequested;
+            let prod = tile.productionFilled;
             let value = 0
             for (let res of prod.keys()) {
                 value += prod.get(res) ?? 0;
@@ -1900,9 +1965,9 @@ class GameScreen extends Widget {
         let p = this.players[this.activePlayer]
         if (!p) return; //throw new Error("No active player found");
 
-        this.tileStack = [...this.level.tileSet].map(t => new tileClasses[t]());
+        this.tileStack = [...this.level.tileSet].map(t => new playerTileClasses[t]());
         this.tileStack.sort(() => Math.random() - 0.5);
-        let startTile = new tileClasses[this.level.startTile]();
+        let startTile = new playerTileClasses[this.level.startTile]();
 
         if (this.board.terrainMap && this.level) {
             let terr = this.board.terrainMap.atPos(this.level.start[0], this.level.start[1]);
