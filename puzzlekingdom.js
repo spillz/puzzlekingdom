@@ -617,6 +617,7 @@ class Tile extends ImageWidget {
      */
     place(terr, centerPos, player, board) {
         this.hexPos = [terr.hexPos[0], terr.hexPos[1]];
+        this.prodBonus = this.terrainPlacement[terr.code] ?? 0;
         if (centerPos !== null) {
             let a = new WidgetAnimation();
             this.w = 0.01;
