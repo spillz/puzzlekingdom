@@ -588,6 +588,7 @@ class Tile extends ImageWidget {
     tileColor = 'blue';
     textColor = 'white';
     prodBonus = 0;
+    showResourceStatus = true;
     score = 0;
     damaged = false;
     /**@type {Object<TerrainType, number|null>} */
@@ -651,9 +652,18 @@ class Tile extends ImageWidget {
         }
     }
 
-    updateStatusIcons() {
+    /**@type {ImageWidget['_draw']} */
+    _draw(app, ctx, millis) {
+        if (this.showResourceStatus) {
+            super._draw(app, ctx, millis);
+        } else {
+            this.draw(app, ctx);
+        }
+    }
+
+    updateResourceStatusIcons() {
         //TODO: Staggered stack multiple items (like a card deck) instead of shrinking them
-        // requiring a click to see what it missing.
+        // requiring a click to see what is missing.
         this.iconBox.children = [];
         let iconsToAdd = [];
         let needsFilled = true;
@@ -1589,9 +1599,12 @@ class ActionBar extends BoxLayout {
         }
     }
 
-    // on_selectedTile(e, o, v) {
-    //     if (this.selectedTile !== null) this.active = true;
-    // }
+    on_selectedTile(e, o, v) {
+        for (let c of this.children) /**@type {Tile}*/(c).selected = false;
+        if (this.selectedTile !== null) {
+            this.selectedTile.selected = true;            
+        }
+    }
     on_active(e, o, v) {
         if (!this.active) {
             for (let c of this.children) {
@@ -1747,8 +1760,14 @@ class GameScreen extends Widget {
             // * Input tiles
             // * Output tiles
             // * Terrain in this tile's network
+            for (let t of player.placedTiles) {
+                t.showResourceStatus = false;
+            }
             this.setTileNetworkInfo(player, terrain);
-            if (!(terrain.tile instanceof Rubble)) return true;
+            if (!(terrain.tile instanceof Rubble)) {
+                this.actionBar.selectedTile = null;
+                return true;
+            }
         }
         if (this.actionBar.selectedTile === null) return true;
         if (!player.localControl) return true;
@@ -1803,7 +1822,11 @@ class GameScreen extends Widget {
 
     /**@type {import('../eskv/lib/modules/widgets.js').EventCallbackNullable} */
     selectTile(e, o, v) {
+        if (v===null) return;
         const player = this.players[this.activePlayer];
+        for (let t of player.placedTiles) {
+            t.showResourceStatus = true;
+        }
         if (player.scoreMarker.tilesPlacedThisTurn < 5) {
             // this.actionBar.active = true;
             if (v) {
@@ -1905,7 +1928,23 @@ class GameScreen extends Widget {
                             }
                         }
                     }
-                    //Clear out the needsFilled and productionRequests of this tile
+                    //Clear out the needsFilled of tiles that this tile supplies
+                    //Some of these may come back on the next iteration except for the deactivateConnections
+                    for (let n of tile.productionFilled.keys()) {
+                        const users = tile.productionFilled.get(n);
+                        if (users!==undefined) {
+                            for (let p of users) {
+                                const needs = p.needsFilled.get(n);
+                                if (needs!==undefined) {
+                                    if (needs.length>1) {
+                                        p.needsFilled.set(n, needs.filter((n)=>n!==tile));
+                                    } else {
+                                        p.needsFilled.delete(n);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     tile.productionFilled.clear();
                     break;
                 }
@@ -1914,7 +1953,7 @@ class GameScreen extends Widget {
 
         for (let tile of player.placedTiles) {
             // totalProd = totalProd.add(tile.productionRequested);
-            tile.updateStatusIcons();
+            tile.updateResourceStatusIcons();
         }
     }
 
@@ -2111,6 +2150,7 @@ class GameScreen extends Widget {
 
     startPlayerTurn() {
         const p = this.players[this.activePlayer];
+        this.updateResourceProduction();
         if (p.localControl) {
             this.actionBar.active = true;
             if (p.scoreMarker.tilesPlacedThisTurn < 5) {
