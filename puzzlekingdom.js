@@ -856,7 +856,7 @@ class Mine extends Tile {
 class Tradeship extends Tile {
     code = /**@type {TileType}*/('T');
     name = 'Tradeship';
-    terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 2 };
+    terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 0 };
     tileColor = colorString([0.4, 0.2, 0.2, 1.0]);
     textColor = 'white';
     ports = /**@type {Set<TerrainHex>} */(new Set());
@@ -920,7 +920,7 @@ class Abbey extends Tile {
 class Farm extends Tile {
     code = /**@type {TileType}*/('F');
     name = 'Farm';
-    terrainPlacement = { 'p': 2, 'f': 1, 'm': null, 'w': null };
+    terrainPlacement = { 'p': 1, 'f': 0, 'm': null, 'w': null };
     tileColor = colorString([0.2, 0.5, 0.2, 1.0]);
     textColor = 'white';
     constructor(props = {}) {
@@ -997,8 +997,8 @@ class TargetTile extends Label {
     draw(app, ctx) {
         ctx.beginPath();
         ctx.arc(this.center_x, this.center_y, this.w / 3, 0, 2 * Math.PI);
-        ctx.fillStyle = this.score > 0 ? 'rgba(255,240,0,0.5)' :
-            this.score === 0 ? 'rgba(100,100,100,0.5)' :
+        ctx.fillStyle = this.score >= 0 ? 'rgba(255,240,0,0.5)' :
+            // this.score === 0 ? 'rgba(100,100,100,0.5)' :
                 'rgba(168,72,65,0.75)';
         ctx.strokeStyle = 'rgba(80,80,80,0.5)';
         ctx.lineWidth = this.w / 10;
