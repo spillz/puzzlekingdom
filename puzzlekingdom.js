@@ -1248,38 +1248,37 @@ class NetworkTileOverlay extends Widget {
      * @param {[number, number]} hexPos 
      * @param {ResourceType|''} input 
      * @param {ResourceType|''} output 
+     * @param {boolean} primary
      */
-    constructor(hexSide, hexPos, input, output) {
+    constructor(hexSide, hexPos, input, output, primary=false) {
         super();
-        this.outlineColor = 'rgba(208, 212, 240,1)';        
         this.w = hexSide;
         this.h = hexSide;
         this.hexPos = hexPos.slice();
         this.updateProperties({});
+        this.primary = primary;
         this.input = input;
         this.output = output;
-    }
-    on_input(event, object, value) {
-        this.updateIO();
-    }
-    on_output(event, object, value) {
         this.updateIO();
     }
     updateIO() {
+        this.outlineColor = this.primary?'rgba(208, 212, 0,1)':'rgba(208, 212, 240,1)'; 
+        const inputColor = 'rgba(192,100,100,0.7)';
+        const outputColor = this.primary?'rgba(100,185,100,0.7)':'rgba(100,100,192,0.7)';
         if (this.input!=='' && this.output!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(192,100,100,0.7)'}),
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(100,100,192,0.7)'} )
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:inputColor}),
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:outputColor} )
             ];
         }
         else if (this.input!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(192,100,100,0.7)'}),
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:inputColor}),
             ];
         }
         else if (this.output!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(100,100,192,0.7)'} )
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:outputColor} )
             ];
         } else {
             this.children = [];
@@ -1534,6 +1533,8 @@ class Board extends Widget {
      * @yields {TerrainHex}
      */
     *connectedIter(terr, player, visited, castles) {
+        yield terr;
+        visited.add(terr);
         //All adjacent tiles are connected
         if (terr.tile !== null && terr.tile instanceof Castle) {
             castles.add(terr);
@@ -2150,20 +2151,35 @@ class GameScreen extends Widget {
             /**@type {ResourceType|''} */
             let input = '';
             if (terr.tile !== null) {
-                for (let n of tile.needsFilled.keys()) {
-                    if (tile.needsFilled.get(n)?.includes(terr.tile)) {
-                        input = n;
-                        break;
+                if (terr !== terrain) {
+                    for (let n of tile.needsFilled.keys()) {
+                        if (tile.needsFilled.get(n)?.includes(terr.tile)) {
+                            input = n;
+                            break;
+                        }
                     }
-                }
-                for (let n of tile.productionFilled.keys()) {
-                    if (tile.productionFilled.get(n)?.includes(terr.tile)) {
-                        output = n;
-                        break;
+                    for (let n of tile.productionFilled.keys()) {
+                        if (tile.productionFilled.get(n)?.includes(terr.tile)) {
+                            output = n;
+                            break;
+                        }
+                    }    
+                } else {
+                    for (let n of tile.needsFilled.keys()) {
+                        if ((tile.needsFilled.get(n)??[]).length<(tile.needs.get(n)??0)) {
+                            input = n;
+                            break;
+                        }
                     }
+                    for (let n of tile.productionFilled.keys()) {
+                        if ((tile.productionFilled.get(n)??[]).length<(tile.productionCapacity.get(n)??0)) {
+                            output = n;
+                            break;
+                        }
+                    }    
                 }
             }
-            info.push(new NetworkTileOverlay(this.board.hexSide, terr.hexPos, input, output));
+            info.push(new NetworkTileOverlay(this.board.hexSide, terr.hexPos, input, output, terr===terrain));
         }
         this.placementLayer.children = info;
     }
