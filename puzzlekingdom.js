@@ -2091,11 +2091,7 @@ class GameScreen extends Widget {
         for (let thex of this.reachableTiles(player)) {
             if (thex.tile !== null && !(thex.tile instanceof Rubble)) continue;
             if (tile.terrainPlacement[thex.code] === null) continue;
-            let prod = tile.productionFilled;
-            let value = 0
-            for (let res of prod.keys()) {
-                value += prod.get(res) ?? 0;
-            }
+            let value = tile.terrainPlacement[thex.code];
             let tt = new TargetTile({
                 w: this.board.hexSide * 2,
                 h: this.board.hexSide * 2,
