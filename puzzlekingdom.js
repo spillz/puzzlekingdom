@@ -1486,16 +1486,16 @@ class Board extends Widget {
         if (terr.tile !== null && terr.tile instanceof Castle) {
             castles.add(terr);
         }
-        for (let t of this.connectedAdjecentPriority(terr)) {
+        for (let t of this.connectedAdjacentPriority(terr)) {
             if (visited.has(t)) continue;
             yield t;
             visited.add(t);
         }
         //Adjacent tiles of adjacent own castles are also connected
-        for (let t of this.connectedAdjecentPriority(terr)) {
+        for (let t of this.connectedAdjacentPriority(terr)) {
             if (t.tile && player.placedTiles.includes(t.tile)) {
                 if (t.tile instanceof Castle) {
-                    for (let tc of this.connectedAdjecentPriority(t)) {
+                    for (let tc of this.connectedAdjacentPriority(t)) {
                         if (visited.has(tc)) continue;
                         yield tc;
                         visited.add(tc);
@@ -1527,7 +1527,7 @@ class Board extends Widget {
                     if (visited.has(tn)) continue;
                     yield tn;
                     visited.add(tn);
-                    for (let tnAdj of this.connectedAdjecentPriority(tn)) {
+                    for (let tnAdj of this.connectedAdjacentPriority(tn)) {
                         if (visited.has(tnAdj)) continue;
                         yield tnAdj
                         visited.add(tnAdj);
@@ -1542,7 +1542,7 @@ class Board extends Widget {
      * @param {TerrainHex} terr 
      * @returns 
      */
-    connectedAdjecentPriority(terr) {
+    connectedAdjacentPriority(terr) {
         let neighbors = [...this.neighborIter(terr.hexPos)];
         neighbors.sort((a,b)=>{
             if (a.tile===null && b.tile===null) return 0;
@@ -1933,34 +1933,45 @@ class GameScreen extends Widget {
             tile.productionFilled.clear();
         }
         let changes = true;
+        // Deactivated users is a mapping from tiles that produce an input to the Sete of users of the input
+        // that are no longer eligible to receive the input
         /**@type {Map<Tile, Set<Tile>>} */
-        const deactivatedConnections = new Map();
+        const deactivatedUsers = new Map();
         for (let t of placedTiles) {
-            deactivatedConnections.set(t, new Set());
+            deactivatedUsers.set(t, new Set());
         }
-        while (changes) {
+        let loops = 0;
+        console.log('==============Starting resource production allocation==============');
+        while (changes && loops<1000) {
+            ++loops;
+            console.log('--------------Loop', loops, '-----------------------------------------------');
             changes = false;
-            //Figure out needs and production
+            // For each tile from highest to lowest tile priority, provide the resources it needs 
+            // from other tiles it is connected to in the network sorted in priority from closest 
+            // to furthest (with ties determined by tile priority)
             for (let tile of placedTiles) {
                 let terr0 = this.board._terrainMap.atPos(tile.hexPos[0], tile.hexPos[1]);
                 if (terr0 === undefined) continue;
-                for (let terr of this.board.connectedIter(terr0, player, new Set([terr0]), new Set([terr0]))) {
+                for (let terr of this.board.connectedIter(terr0, player, new Set(), new Set())) {
                     const adjTile = terr.tile;
-                    const conn = /**@type {Set<Tile>}*/(deactivatedConnections.get(tile));
-                    if (adjTile!==null && !conn.has(adjTile)) {
-                        for (let need of tile.needs.keys()) {
-                            const neededAmt = tile.needs.get(need);
-                            const neededAmtFilled = tile.needsFilled.get(need)??[];
+                    if (adjTile===null) continue;
+                    const conn = /**@type {Set<Tile>}*/(deactivatedUsers.get(tile));
+                    if (!conn.has(adjTile)) {
+                        const initMeets = adjTile.needsFilled.meets(adjTile.needs);
+                        for (let need of adjTile.needs.keys()) {
+                            const neededAmt = adjTile.needs.get(need);
+                            const neededAmtFilled = adjTile.needsFilled.get(need)??[];
                             if (neededAmt===undefined) continue;
                             if (neededAmt===0 && neededAmtFilled.length===1 || neededAmt>0 && neededAmtFilled.length === neededAmt) continue;
-                            if (!adjTile.productionCapacity.has(need)) continue;
-                            const providedAmt = adjTile.productionCapacity.get(need);
+                            if (!tile.productionCapacity.has(need)) continue;
+                            const providedAmt = tile.productionCapacity.get(need);
                             if (providedAmt === undefined) continue;
-                            if (adjTile.productionFilled.get(need)?.length === providedAmt) continue;
-                            // changes = true;
-                            adjTile.productionFilled.addResource(need, tile);
-                            tile.needsFilled.addResource(need, adjTile);
+                            if (tile.productionFilled.get(need)?.length === providedAmt) continue;
+                            tile.productionFilled.addResource(need, adjTile);
+                            adjTile.needsFilled.addResource(need, tile);
+                            console.log('connected', tile.code, tile.hexPos, '->', adjTile.code, adjTile.hexPos, need);
                         }
+                        changes = adjTile.needsFilled.meets(adjTile.needs)!==initMeets;
                     }
                 }
             }
@@ -1972,56 +1983,67 @@ class GameScreen extends Widget {
                     const activeSuppliers = suppliers.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
                     const inactiveSuppliers = suppliers.filter((sTile) => !sTile.needsFilled.meets(sTile.needs));
                     if (inactiveSuppliers.length > 0) {
+                        console.log('deactivated', tile.code, tile.hexPos, '->', need, inactiveSuppliers.map((s)=>s.code));
                         if (activeSuppliers.length > 0) {
                             tile.needsFilled.set(need, activeSuppliers);
                         } else {
                             tile.needsFilled.delete(need);
                         }
                         for (let is of inactiveSuppliers) {
-                            deactivatedConnections.get(tile)?.add(is);
+                            // deactivatedUsers.get(tile)?.add(is);
+                            deactivatedUsers.get(is)?.add(tile);
                         }
                         changes = true;
                     }
                 }
-                if (!tile.needsFilled.meets(tile.needs)) {
-                    //Clear out the production link from tiles that are supplying this one
-                    //Some of these may come back on the next iteration except for the deactivateConnections
-                    for (let n of tile.needsFilled.keys()) {
-                        const nfts = tile.needsFilled.get(n);
-                        if (nfts===undefined) continue;
-                        for (let nft of nfts) {
-                            const prods = nft.productionFilled.get(n);
-                            if (prods!==undefined) {
-                                if (prods.length>1) {
-                                    nft.productionFilled.set(n, prods.filter((p)=>p!==tile));
-                                } else {
-                                    nft.productionFilled.delete(n);
+                if (changes) {
+                    if (!tile.needsFilled.meets(tile.needs)) {
+                        //Clear out the production link from tiles that are supplying this one
+                        //Some of these may come back on the next iteration except for the deactivateConnections
+                        for (let n of tile.needsFilled.keys()) {
+                            const nfts = tile.needsFilled.get(n);
+                            if (nfts===undefined) continue;
+                            for (let nft of nfts) {
+                                const prods = nft.productionFilled.get(n);
+                                if (prods!==undefined) {
+                                    if (prods.length>1) {
+                                        nft.productionFilled.set(n, prods.filter((p)=>p!==tile));
+                                    } else {
+                                        nft.productionFilled.delete(n);
+                                    }
+                                    console.log('unlinked', nft.code, nft.hexPos, '->', tile.code, tile.hexPos, n);
                                 }
-                                // changes = true;
                             }
                         }
-                    }
-                    //Clear out the needsFilled of tiles that this tile supplies
-                    //Some of these may come back on the next iteration except for the deactivateConnections
-                    for (let n of tile.productionFilled.keys()) {
-                        const users = tile.productionFilled.get(n);
-                        if (users!==undefined) {
-                            for (let p of users) {
-                                const needs = p.needsFilled.get(n);
-                                if (needs!==undefined) {
-                                    if (needs.length>1) {
-                                        p.needsFilled.set(n, needs.filter((n)=>n!==tile));
-                                    } else {
-                                        p.needsFilled.delete(n);
+                        //Clear out the needsFilled of tiles that this tile supplies
+                        //Some of these may come back on the next iteration except for the deactivateUsers
+                        for (let n of tile.productionFilled.keys()) {
+                            const users = tile.productionFilled.get(n);
+                            if (users!==undefined) {
+                                for (let p of users) {
+                                    const needs = p.needsFilled.get(n);
+                                    if (needs!==undefined) {
+                                        if (needs.length>1) {
+                                            p.needsFilled.set(n, needs.filter((n)=>n!==tile));
+                                        } else {
+                                            p.needsFilled.delete(n);
+                                        }
+                                        console.log('unlinked', tile.code, tile.hexPos, '->', p.code, p.hexPos, n);
                                     }
                                 }
                             }
                         }
+                        if (tile.productionFilled.size>0) {
+                            tile.productionFilled.clear();
+                        }
+                        changes = true;
                     }
-                    tile.productionFilled.clear();
-                    break;
+                    break; 
                 }
             }    
+        }
+        if (loops>=1000) {
+            console.log('Exceeded loop limit during resource produciton allocation');
         }
 
         for (let tile of player.placedTiles) {
