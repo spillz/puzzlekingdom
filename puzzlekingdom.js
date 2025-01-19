@@ -2208,15 +2208,20 @@ class GameScreen extends Widget {
         if (this.activePlayer === 0) {
             this.players[this.activePlayer].endTurn(this);
             const player = this.players[this.activePlayer];
+            const enemyPlayer = this.players[1];
             for (let t of player.placedTiles) {
+                const terrain = this.board.terrainMap.atPos(t.hexPos[0], t.hexPos[1]);
+                if (!terrain) continue;
                 if (t instanceof Stronghold && t.needsFilled.meets(t.needs)) {
-                    for (let terr of this.board.neighborIter(t.hexPos)) {
-                        if (terr.tile instanceof EnemyDragon || terr.tile instanceof EnemyStronghold) {
-                            terr.tile.health--;
-                            if (terr.tile.health <= 0) {
-                                const otherPlayer = this.players[1];
-                                const rubble = new Rubble();
-                                this.placeTile(otherPlayer, terr, rubble, true, false);
+                    for (let eterr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
+                        const etile = eterr;
+                        if (etile) {
+                            if (etile instanceof EnemyDragon || etile instanceof EnemyStronghold) {
+                                etile.health--;
+                                if (etile.health <= 0) {
+                                    const rubble = new Rubble();
+                                    this.placeTile(enemyPlayer, terrain, rubble, true, false);
+                                }
                             }
                         }
                     }
