@@ -230,13 +230,49 @@ class ProductionChain extends Map {
      * 
      * @param {ResourceType} resource 
      * @param {Tile} connection 
+     * @returns 
      */
-    addResource(resource, connection) {
-        if (this.has(resource)) {
-            this.get(resource)?.push(connection);
+    hasConnection(resource, connection) {
+        return this.get(resource)?.includes(connection) ?? false;
+    }
+    /**
+     * 
+     * @param {ResourceType} resource 
+     * @param {Tile} connection 
+     */
+    addConnection(resource, connection) {
+        const arr = this.get(resource);
+        if (arr!==undefined) {
+            if (!arr.includes(connection)) {
+                arr.push(connection);
+                return true;
+            }
         } else {
             this.set(resource, [connection]);
+            return true;
         }
+        return false;
+    }
+    /**
+     * 
+     * @param {ResourceType} resource 
+     * @param {Tile} connection 
+     */
+    removeConnection(resource, connection) {
+        if (this.has(resource)) {
+            const arr = this.get(resource)??[];
+            if (arr.length>1) {
+                const index = arr.indexOf(connection);
+                if (index >= 0) {
+                    arr.splice(index, 1);
+                    return true;
+                }
+            } else {
+                this.delete(resource);
+                return true;
+            }
+        }
+        return false;
     }
     /**
      * 
