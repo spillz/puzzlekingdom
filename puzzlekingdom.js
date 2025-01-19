@@ -1236,6 +1236,8 @@ class NetworkTileOverlay extends Widget {
         }
     }
 }
+
+class TileInfoPane extends Widget {
     /**
      * 
      * @param {Board} board 
@@ -1667,7 +1669,9 @@ class ActionBar extends BoxLayout {
                         this.selectedTile =/**@type {Tile}*/(o);
                         /**@type {Tile}*/(o).selected = true;
                     }
+                    return true;
                 };
+                return false;
             });
         }
     }
@@ -1707,8 +1711,8 @@ class GameScreen extends Widget {
         this.selectPos = [0, 0];
         this.board = new Board({ hints: { right: 1, y: 0, w: '1.5h', h: 1 } });
         this.addChild(this.board);
-        this.tileInfo = new TileInfo(this.board, { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 });
-        this.addChild(this.tileInfo)
+        this.tileInfoPane = new TileInfoPane(this.board, { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 });
+        this.addChild(this.tileInfoPane)
         this.placementLayer = new Widget({ hints: { x: 0, y: 0, w: 1, h: 1 } });
         this.addChild(this.placementLayer);
         this.scoreboard = new BoxLayout({ align: 'right', hints: { right: 0.99, y: 0.01, w: 1, h: 0.05 } });
@@ -1755,7 +1759,6 @@ class GameScreen extends Widget {
             this.updateResourceProduction();
         }
     }
-
 
     /**
      * 
@@ -1804,15 +1807,16 @@ class GameScreen extends Widget {
             // }
             if (t instanceof Castle) {
                 t.network = new Set([terr]);
-                t.updateNetwork(terr, this.board, 3, t.network, new Set([terr]));
+                t.updateNetwork(terr, this.board, 3, t.network, new Set());
             }
         }
-        this.tileInfo.tile = tile;
+        this.tileInfoPane.tile = tile;
         this.actionBar.selectedTile = null;
         if (advanceTurn) {
             this.clearPlacementTargets();
             // this.nextPlayer();
         }
+        if (player.scoreMarker.tilesPlacedThisTurn >= 5) this.actionBar.active = false;
         return true;
     }
 
@@ -1826,23 +1830,20 @@ class GameScreen extends Widget {
         if (this.gameOver) return true;
         const player = this.players[this.activePlayer];
         if (terrain.tile) {
-            this.tileInfo.tile = terrain.tile;
             const verb = !(terrain.tile instanceof Rubble) && terrain.tile.needsFilled.meets(terrain.tile.needs) ? 'Active' : 'Inactive';
             this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
-            //TODO: Here we want to highlight:
-            // * Input tiles
-            // * Output tiles
-            // * Terrain in this tile's network
-            for (let t of player.placedTiles) {
-                t.showResourceStatus = false;
-            }
-            this.setTileNetworkInfo(player, terrain);
             if (!(terrain.tile instanceof Rubble)) {
                 this.actionBar.selectedTile = null;
+                this.displayTileNetworkInfo(player, terrain);
+                this.tileInfoPane.tile = terrain.tile;
                 return true;
             }
+            this.tileInfoPane.tile = terrain.tile;
         }
-        if (this.actionBar.selectedTile === null) return true;
+        if (this.actionBar.selectedTile === null) {
+            this.displayTileNetworkInfo(player, terrain);
+            return true;
+        }
         if (!player.localControl) return true;
         const tile = this.actionBar.selectedTile;
         const tileToPlace = new playerTileClasses[tile.code]();
@@ -1895,27 +1896,30 @@ class GameScreen extends Widget {
 
     /**@type {import('../eskv/lib/modules/widgets.js').EventCallbackNullable} */
     selectTile(e, o, v) {
-        if (v===null) return;
-        const player = this.players[this.activePlayer];
-        for (let t of player.placedTiles) {
-            t.showResourceStatus = true;
+        if (v === null) {
+            this.clearPlacementTargets();
+            this.tileInfoPane.tile = null;
+            this.wStateLabel.text = 'Select a building type';
+            return;
         }
+        const player = this.players[this.activePlayer];
+        this.displayTileNetworkInfo(player, null);
         if (player.scoreMarker.tilesPlacedThisTurn < 5) {
             // this.actionBar.active = true;
             if (v) {
                 this.wStateLabel.text = 'Place ' + v.name;
                 this.setPlacementTargets(v.code);
-                this.tileInfo.tile = v;
+                this.tileInfoPane.tile = v;
             } else {
-                this.wStateLabel.text = 'Select a building type';
-                this.clearPlacementTargets();
-                this.tileInfo.tile = null;
+                // this.wStateLabel.text = 'Select a building type';
+                // this.clearPlacementTargets();
+                // this.tileInfoPane.tile = null;
             }
         } else {
             if (this.actionBar.active) this.actionBar.active = false;
-            this.tileInfo.tile = null;
-            this.wStateLabel.text = 'End turn';
             this.clearPlacementTargets();
+            this.tileInfoPane.tile = null;
+            this.wStateLabel.text = 'End turn';
         }
     }
 
@@ -2052,6 +2056,18 @@ class GameScreen extends Widget {
         }
     }
 
+    on_touch_down(e, o, touch) {
+        if (!super.on_touch_down(e, o, touch)) {
+            if (this.collide(touch.rect)) {
+                this.displayTileNetworkInfo(this.players[this.activePlayer], null);
+                if (this.actionBar.selectedTile !== null) {
+                    this.actionBar.selectedTile = null;
+                }
+            }
+            return true;    
+        }
+        return false;
+    }
     /**
      * 
      * @param {Player} player 
@@ -2315,8 +2331,8 @@ class GameScreen extends Widget {
             tt.center_y = hp[1];
         }
 
-        this.applyHints(this.tileInfo);
-        this.tileInfo.layoutChildren();
+        this.applyHints(this.tileInfoPane);
+        this.tileInfoPane.layoutChildren();
 
         this.applyHints(this.scoreboard);
         this.scoreboard.layoutChildren();
