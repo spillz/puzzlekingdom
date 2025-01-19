@@ -160,6 +160,21 @@ const tileNames = {
     ED: 'enemy dragon',
 }
 
+const tileDescriptions = {
+    C: 'A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once active, castles connect their production links to the links of any other castles in range 3.',
+    V: 'A village produces workers once provided with food.',
+    A: 'An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.',
+    F: 'A farm produces food once supplied with workers.',
+    M: 'A mine produces ore once supplied with workers.',
+    S: 'A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from active strongholds will attack enemies that they connect their resources to.',
+    T: 'A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once active, tradeships allow production links between all structures within reach of the Tradeship.',
+    X: 'Rubble is the remains of a structure or enemy that you can build over.',
+    ET: 'An enemy tent is a temporary installation that expands enemy reach but does not attack.',
+    ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.',
+    EC: 'enemy castle',
+    ED: 'An enemy dragon lives in mountains and will attack structures in range 2 at the end of each turn.',
+}
+
 /**@type {{[id in ResourceType]:string}} */
 const resourceNames = {
     rf: 'food',
@@ -1189,7 +1204,6 @@ class TileInfo extends Widget {
         this.hints = hints;
         /**@type {Tile|null} */
         this.tile = null;
-        // this.tileLabel = new Label({align:'left', hints:{x:0, y:0, h:'1.0', w:1}}),
         this.tileImage = new ImageWidget({ hints: { x: 0, y: '0.0', h: '1.0', w: '1.0' } }), //Tile & name
         this.terrainLabel = new Label({ align: 'left', hints: { x: 0, y: '1.0', h: '0.5', w: 1 } }), //Terrain
         this.terrainBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '1.5', w: 1.0, h: '1.5' } }),
@@ -1197,6 +1211,7 @@ class TileInfo extends Widget {
         this.resourceInBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '3.5', w: 1.0, h: '1.5' } }),
         this.resourceOutLabel = new Label({ align: 'left', text: 'Outputs', hints: { x: 0, y: '5.0', w: 1.0, h: '0.5' } }),
         this.resourceOutBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '5.5', w: 1.0, h: '1.5' } }),
+        this.tileDescription = new Label({align:'left', fontSize: '0.25', wrap:true, hints:{x:0, y:'7', h:null, w:'5'}}),
         this.children = [
             // this.tileLabel,
             this.tileImage,
@@ -1206,20 +1221,35 @@ class TileInfo extends Widget {
             this.resourceInBox,
             this.resourceOutLabel,
             this.resourceOutBox,
+            this.tileDescription,
         ];
         this.updateProperties({});
     }
     /**
      * 
      * @param {string} event 
-     * @param {TileInfo} object 
+     * @param {TileInfoPane} object 
      * @param {Tile|null} value 
      */
     on_tile(event, object, value) {
-        if (this.tile === null) return;
+        if (this.tile === null) {
+            this.children = [];
+            return;
+        }
+        this.children = [
+            // this.tileLabel,
+            this.tileImage,
+            this.terrainLabel,
+            this.terrainBox,
+            this.resourceInLabel,
+            this.resourceInBox,
+            this.resourceOutLabel,
+            this.resourceOutBox,
+            this.tileDescription,
+        ];
         // this.tileLabel.text = tileNames[this.tile.code];
         this.tileImage.src = gameImages[this.tile.code];
-        //TODO: Add tile descriptions
+        this.tileDescription.text = tileDescriptions[this.tile.code];
         const terrain = this.board.terrainMap.atPos(...this.tile.hexPos);
         if (terrain !== undefined) {
             this.terrainLabel.text = terrainNames[terrain.code];
