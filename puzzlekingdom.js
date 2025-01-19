@@ -817,13 +817,20 @@ class Castle extends Tile {
      * @param {Set<TerrainHex>} visited 
      */
     updateNetwork(terr, board, range, network = new Set(), visited = new Set()) {
+        /** {TerrainHex[]} */
+        const newNodes = [];
         for (let t of board.neighborIter(terr.hexPos)) {
             if (!(t instanceof Water) && !(visited.has(t))) {
                 if (t.tile instanceof Castle) {
                     network.add(t);
                 }
                 visited.add(t);
-                if (range > 1) this.updateNetwork(t, board, range - 1, network, visited);
+                newNodes.push(t);
+            }
+        }
+        if (range > 1) {
+            for (let t of newNodes) {
+                this.updateNetwork(t, board, range - 1, network, visited);
             }
         }
     }
@@ -922,12 +929,19 @@ class Tradeship extends Tile {
      * @param {Set<TerrainHex>} visited 
      */
     updatePorts(terr, board, range, ports, visited) {
+        /**@type {TerrainHex[]} */
+        const newPorts = [];
         for (let t of board.neighborIter(terr.hexPos)) {
             if (!visited.has(t)) {
                 visited.add(t);
                 ports.add(t);
+                newPorts.push(t);
+            }
+        }
+        if (range > 1) {
+            for (let t of newPorts) {
                 if (t instanceof Water) {
-                    if (range > 1) this.updatePorts(t, board, range - 1, ports, visited);
+                    this.updatePorts(t, board, range - 1, ports, visited);
                 }
             }
         }
