@@ -687,10 +687,10 @@ class Tile extends ImageWidget {
             if (minAmt !== undefined && minAmt > 0 && this.needsFilled.get(n)?.length !== minAmt) {
                 const icon = new ImageWidget({
                     src: gameImages[n],
-                    hints: { h: 1, w: '1wh' },
+                    hints: { h: 0.5, w: '1wh' },
                     bgColor: 'rgba(90,0,0,0.6)',
                     outlineColor: 'rgb(90,0,0)',
-                })
+                });
                 iconsToAdd.push(icon);
                 needsFilled = false;
             }
@@ -705,7 +705,7 @@ class Tile extends ImageWidget {
                 if (connectedTiles === undefined || connectedTiles.length !== this.productionCapacity.get(n)) {
                     const icon = new ImageWidget({
                         src: gameImages[n],
-                        hints: { h: 1, w: '1wh' },
+                        hints: { h: 0.5, w: '1wh' },
                         bgColor: color,
                         outlineColor: outline,
                     })
@@ -715,7 +715,7 @@ class Tile extends ImageWidget {
         }
         const size = iconsToAdd.length;
         for (let i of iconsToAdd) {
-            i.hints['h'] = 1 / size;
+            i.hints['h'] = size===1? 0.7 : 0.7 / (size-1);
         }
         this.iconBox.children = iconsToAdd;
     }
