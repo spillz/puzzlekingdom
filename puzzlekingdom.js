@@ -1191,8 +1191,51 @@ class TerrainMap extends Array {
     }
 }
 
-
-class TileInfo extends Widget {
+class NetworkTileOverlay extends Widget {
+    /**
+     * 
+     * @param {number} hexSide 
+     * @param {[number, number]} hexPos 
+     * @param {ResourceType|''} input 
+     * @param {ResourceType|''} output 
+     */
+    constructor(hexSide, hexPos, input, output) {
+        super();
+        this.outlineColor = 'rgba(208, 212, 240,1)';        
+        this.w = hexSide;
+        this.h = hexSide;
+        this.hexPos = hexPos.slice();
+        this.updateProperties({});
+        this.input = input;
+        this.output = output;
+    }
+    on_input(event, object, value) {
+        this.updateIO();
+    }
+    on_output(event, object, value) {
+        this.updateIO();
+    }
+    updateIO() {
+        if (this.input!=='' && this.output!=='') {
+            this.children = [
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(100,100,192,0.7)'}),
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(192,100,100,0.7)'} )
+            ];
+        }
+        else if (this.input!=='') {
+            this.children = [
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(100,100,192,0.7)'}),
+            ];
+        }
+        else if (this.output!=='') {
+            this.children = [
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(192,100,100,0.7)'} )
+            ];
+        } else {
+            this.children = [];
+        }
+    }
+}
     /**
      * 
      * @param {Board} board 
@@ -1990,52 +2033,49 @@ class GameScreen extends Widget {
     /**
      * 
      * @param {Player} player 
-     * @param {TerrainHex} terrain 
+     * @param {TerrainHex|null} terrain 
      */
-    setTileNetworkInfo(player, terrain) {
-        const tile = terrain.tile;
-        if (tile===null) {
+    displayTileNetworkInfo(player, terrain) {
+        if (terrain === null) {
+            for (let t of player.placedTiles) {
+                t.showResourceStatus = true;
+            }
             this.placementLayer.children = [];
             return;
         }
-        /**@type {ImageWidget[]} */
+        const tile = terrain.tile;
+        if (tile===null) {
+            for (let t of player.placedTiles) {
+                t.showResourceStatus = true;
+            }
+            this.placementLayer.children = [];
+            return;
+        }
+        for (let t of player.placedTiles) {
+            t.showResourceStatus = false;
+        }
+        /**@type {NetworkTileOverlay[]} */
         const info = [];
         for (let terr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
-            let placed = false;
+            /**@type {ResourceType|''} */
+            let output = '';
+            /**@type {ResourceType|''} */
+            let input = '';
             if (terr.tile !== null) {
                 for (let n of tile.needsFilled.keys()) {
                     if (tile.needsFilled.get(n)?.includes(terr.tile)) {
-                        info.push(new ImageWidget({
-                            src: gameImages[n],
-                            w: this.board.hexSide,
-                            h: this.board.hexSide,
-                            hexPos: terr.hexPos.slice(),
-                            bgColor: 'rgba(255,0,0,0.5)'
-                        }));
-                        placed = true;
+                        input = n;
+                        break;
                     }
                 }
                 for (let n of tile.productionFilled.keys()) {
                     if (tile.productionFilled.get(n)?.includes(terr.tile)) {
-                        info.push(new ImageWidget({
-                            src: gameImages[n],
-                            w: this.board.hexSide,
-                            h: this.board.hexSide,
-                            hexPos: terr.hexPos.slice(),
-                            bgColor: 'rgba(0,0,255,0.5)'
-                        }));
-                        placed = true;
+                        output = n;
+                        break;
                     }
                 }
-                if (!placed) {
-                    info.push(new ImageWidget({
-                        w: this.board.hexSide,
-                        h: this.board.hexSide,
-                        hexPos: terr.hexPos.slice(),
-                        bgColor: 'rgba(128,128,128,0.5)'
-                    }));
-                }
             }
+            info.push(new NetworkTileOverlay(this.board.hexSide, terr.hexPos, input, output));
         }
         this.placementLayer.children = info;
     }
