@@ -931,7 +931,7 @@ class Farm extends Tile {
     get productionCapacity() {
         const blessed = this.needsFilled.get('rb') ? 2 : 1;
         if (this.parent instanceof Forest) {
-            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus, 'rt': 2 * blessed});
+            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus, 'rt': 1 * blessed});
         } else {
             return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus });
         }
@@ -1218,18 +1218,18 @@ class NetworkTileOverlay extends Widget {
     updateIO() {
         if (this.input!=='' && this.output!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(100,100,192,0.7)'}),
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(192,100,100,0.7)'} )
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(192,100,100,0.7)'}),
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(100,100,192,0.7)'} )
             ];
         }
         else if (this.input!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(100,100,192,0.7)'}),
+                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:'rgba(192,100,100,0.7)'}),
             ];
         }
         else if (this.output!=='') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(192,100,100,0.7)'} )
+                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:'rgba(100,100,192,0.7)'} )
             ];
         } else {
             this.children = [];
@@ -1961,7 +1961,6 @@ class GameScreen extends Widget {
                     if (adjTile===null) continue;
                     const conn = /**@type {Set<Tile>}*/(deactivatedUsers.get(tile));
                     if (!conn.has(adjTile)) {
-                        const initMeets = adjTile.needsFilled.meets(adjTile.needs);
                         for (let need of adjTile.needs.keys()) {
                             const neededAmt = adjTile.needs.get(need);
                             const neededAmtFilled = adjTile.needsFilled.get(need)??[];
@@ -1973,12 +1972,13 @@ class GameScreen extends Widget {
                             if (tile.productionFilled.get(need)?.length === providedAmt) continue;
                             tile.productionFilled.addResource(need, adjTile);
                             adjTile.needsFilled.addResource(need, tile);
+                            changes = true;
                             console.log('connected', tile.code, tile.hexPos, '->', adjTile.code, adjTile.hexPos, need);
                         }
-                        changes = adjTile.needsFilled.meets(adjTile.needs)!==initMeets;
                     }
                 }
             }
+            if (changes) continue;
             // Now we remove needsFilled and productionRequested of the next tile lacking the needed resources or 
             // whose producer does not have the resource it needs to activate
             for (let tile of reversePlacedTiles) {
@@ -2230,13 +2230,13 @@ class GameScreen extends Widget {
                 if (!terrain) continue;
                 if (t instanceof Stronghold && t.needsFilled.meets(t.needs)) {
                     for (let eterr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
-                        const etile = eterr;
+                        const etile = eterr.tile;
                         if (etile) {
                             if (etile instanceof EnemyDragon || etile instanceof EnemyStronghold) {
                                 etile.health--;
                                 if (etile.health <= 0) {
                                     const rubble = new Rubble();
-                                    this.placeTile(enemyPlayer, terrain, rubble, true, false);
+                                    this.placeTile(enemyPlayer, eterr, rubble, true, false);
                                 }
                             }
                         }
