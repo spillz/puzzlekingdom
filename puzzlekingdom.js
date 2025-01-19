@@ -2011,21 +2011,20 @@ class GameScreen extends Widget {
                     const adjTile = terr.tile;
                     if (adjTile===null) continue;
                     const conn = /**@type {Set<Tile>}*/(deactivatedUsers.get(tile));
-                    if (!conn.has(adjTile)) {
-                        for (let need of adjTile.needs.keys()) {
-                            const neededAmt = adjTile.needs.get(need);
-                            const neededAmtFilled = adjTile.needsFilled.get(need)??[];
-                            if (neededAmt===undefined) continue;
-                            if (neededAmt===0 && neededAmtFilled.length===1 || neededAmt>0 && neededAmtFilled.length === neededAmt) continue;
-                            if (!tile.productionCapacity.has(need)) continue;
-                            const providedAmt = tile.productionCapacity.get(need);
-                            if (providedAmt === undefined) continue;
-                            if (tile.productionFilled.get(need)?.length === providedAmt) continue;
-                            tile.productionFilled.addResource(need, adjTile);
-                            adjTile.needsFilled.addResource(need, tile);
-                            changes = true;
-                            console.log('connected', tile.code, tile.hexPos, '->', adjTile.code, adjTile.hexPos, need);
-                        }
+                    if (conn.has(adjTile) && !tile.needsFilled.meets(tile.needs)) continue; //Ignored deactivated connections
+                    for (let need of adjTile.needs.keys()) {
+                        const neededAmt = adjTile.needs.get(need);
+                        const neededAmtFilled = adjTile.needsFilled.get(need)??[];
+                        if (neededAmt===undefined) continue;
+                        if (neededAmt===0 && neededAmtFilled.length===1 || neededAmt>0 && neededAmtFilled.length === neededAmt) continue;
+                        if (!tile.productionCapacity.has(need)) continue;
+                        const providedAmt = tile.productionCapacity.get(need);
+                        if (providedAmt === undefined) continue;
+                        if (tile.productionFilled.get(need)?.length === providedAmt) continue;
+                        tile.productionFilled.addConnection(need, adjTile);
+                        adjTile.needsFilled.addConnection(need, tile);
+                        changes = true;
+                        console.log('connected', tile, ...tile.hexPos, '->', adjTile, ...adjTile.hexPos, need);
                     }
                 }
             }
@@ -2038,15 +2037,13 @@ class GameScreen extends Widget {
                     const activeSuppliers = suppliers.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
                     const inactiveSuppliers = suppliers.filter((sTile) => !sTile.needsFilled.meets(sTile.needs));
                     if (inactiveSuppliers.length > 0) {
-                        console.log('deactivated', tile.code, tile.hexPos, '->', need, inactiveSuppliers.map((s)=>s.code));
-                        if (activeSuppliers.length > 0) {
-                            tile.needsFilled.set(need, activeSuppliers);
-                        } else {
-                            tile.needsFilled.delete(need);
+                        for (let t of inactiveSuppliers) {
+                            tile.needsFilled.removeConnection(need, t);
                         }
                         for (let is of inactiveSuppliers) {
-                            // deactivatedUsers.get(tile)?.add(is);
+                            is.productionFilled.removeConnection(need, tile);
                             deactivatedUsers.get(is)?.add(tile);
+                            console.log('deactivated', is, ...is.hexPos, '->', need, tile, ...tile.hexPos);
                         }
                         changes = true;
                     }
@@ -2059,14 +2056,8 @@ class GameScreen extends Widget {
                             const nfts = tile.needsFilled.get(n);
                             if (nfts===undefined) continue;
                             for (let nft of nfts) {
-                                const prods = nft.productionFilled.get(n);
-                                if (prods!==undefined) {
-                                    if (prods.length>1) {
-                                        nft.productionFilled.set(n, prods.filter((p)=>p!==tile));
-                                    } else {
-                                        nft.productionFilled.delete(n);
-                                    }
-                                    console.log('unlinked', nft.code, nft.hexPos, '->', tile.code, tile.hexPos, n);
+                                if (nft.productionFilled.removeConnection(n, tile)) {
+                                    console.log('unlinked', nft, ...nft.hexPos, '->', tile, ...tile.hexPos, n);
                                 }
                             }
                         }
@@ -2076,14 +2067,8 @@ class GameScreen extends Widget {
                             const users = tile.productionFilled.get(n);
                             if (users!==undefined) {
                                 for (let p of users) {
-                                    const needs = p.needsFilled.get(n);
-                                    if (needs!==undefined) {
-                                        if (needs.length>1) {
-                                            p.needsFilled.set(n, needs.filter((n)=>n!==tile));
-                                        } else {
-                                            p.needsFilled.delete(n);
-                                        }
-                                        console.log('unlinked', tile.code, tile.hexPos, '->', p.code, p.hexPos, n);
+                                    if (p.needsFilled.removeConnection(n, tile)) {
+                                        console.log('unlinked', tile, ...tile.hexPos, '->', p, ...p.hexPos, n);
                                     }
                                 }
                             }
