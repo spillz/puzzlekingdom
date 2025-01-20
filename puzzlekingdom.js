@@ -281,7 +281,7 @@ class ProductionChain extends Map {
     meets(quantity) {
         for (let r of quantity.keys()) {
             const q = quantity.get(r);
-            if (q !== undefined && q !== 0 && this.get(r)?.length !== q) return false;
+            if (q !== undefined && q !== 0 && (this.get(r)??[]).length < q) return false;
         }
         return true;
     }
@@ -1548,14 +1548,15 @@ class Board extends Widget {
         for (let t of this.connectedAdjacentPriority(terr)) {
             if (t.tile && player.placedTiles.includes(t.tile)) {
                 if (t.tile instanceof Castle) {
+                    castles.add(t);
                     for (let tc of this.connectedAdjacentPriority(t)) {
                         if (visited.has(tc)) continue;
                         yield tc;
                         visited.add(tc);
                     }
-                    for (let tn of t.tile.network) {
-                        castles.add(tn);
-                    }
+                    // for (let tn of t.tile.network) {
+                    //     castles.add(tn);
+                    // }
                 }
             }
         }
@@ -1567,9 +1568,9 @@ class Board extends Widget {
                     if (visited.has(tp)) continue;
                     yield tp;
                     visited.add(tp);
-                    if (tp.tile !== null && tp.tile instanceof Castle) {
-                        castles.add(tp);
-                    }
+                    // if (tp.tile !== null && tp.tile instanceof Castle) {
+                    //     castles.add(tp);
+                    // }
                 }
             }
         }
@@ -1577,8 +1578,7 @@ class Board extends Widget {
         for (let tc of castles) {
             if (tc.tile !== null && tc.tile instanceof Castle) {
                 for (let tn of tc.tile.network) {
-                    if (visited.has(tn)) continue;
-                    yield tn;
+                    if (!visited.has(tn)) yield tn;
                     visited.add(tn);
                     for (let tnAdj of this.connectedAdjacentPriority(tn)) {
                         if (visited.has(tnAdj)) continue;
@@ -2016,11 +2016,11 @@ class GameScreen extends Widget {
                         const neededAmt = adjTile.needs.get(need);
                         const neededAmtFilled = adjTile.needsFilled.get(need)??[];
                         if (neededAmt===undefined) continue;
-                        if (neededAmt===0 && neededAmtFilled.length===1 || neededAmt>0 && neededAmtFilled.length === neededAmt) continue;
+                        if (neededAmt===0 && neededAmtFilled.length >= 1 || neededAmt>0 && neededAmtFilled.length >= neededAmt) continue;
                         if (!tile.productionCapacity.has(need)) continue;
                         const providedAmt = tile.productionCapacity.get(need);
                         if (providedAmt === undefined) continue;
-                        if (tile.productionFilled.get(need)?.length === providedAmt) continue;
+                        if ((tile.productionFilled.get(need)??[]).length >= providedAmt) continue;
                         tile.productionFilled.addConnection(need, adjTile);
                         adjTile.needsFilled.addConnection(need, tile);
                         changes = true;
