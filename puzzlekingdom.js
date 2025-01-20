@@ -1483,6 +1483,11 @@ class Board extends Widget {
         this.boardSize = level.boardSize;
         this.terrainMap = new TerrainMap(level, this.boardSize, this.orientation);
     }
+    on_orientation(event, object, value) {
+        for (let t of this.terrainMap.iter()) {
+            t.orientation = value;
+        }
+    }
     /**
      * 
      * @param {[number, number]} hexPos 
@@ -1761,7 +1766,7 @@ class GameScreen extends Widget {
 
         /**@type {[number, number]} */
         this.selectPos = [0, 0];
-        this.board = new Board({ hints: { right: 1, y: 0, w: '1.5h', h: 1 } });
+        this.board = new Board({ hints: { right: 1, y: 0, w: '1h', h: 1 } });
         this.addChild(this.board);
         this.tileInfoPane = new TileInfoPane(this.board, { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 });
         this.addChild(this.tileInfoPane)
@@ -1769,8 +1774,8 @@ class GameScreen extends Widget {
         this.addChild(this.placementLayer);
         this.scoreboard = new BoxLayout({ align: 'right', hints: { right: 0.99, y: 0.01, w: 1, h: 0.05 } });
         this.addChild(this.scoreboard);
-        this.wStateLabel = new Label({ text: '', color: 'white', align: 'left', hints: { x: 0.01, y: 0.01, w: 1, h: '1.0' } });
-        this.addChild(this.wStateLabel);
+        this.statusLabel = new Label({ text: '', color: 'white', align: 'left', hints: { x: 0.01, y: 0.01, w: 1, h: '1.0' } });
+        this.addChild(this.statusLabel);
         this.actionBar = new ActionBar({ hints: { x: 0, y: '1.0', w: '0.14wh', h: 0.84 }, bgColor: 'gray', outlineColor: 'white' });
         this.addChild(this.actionBar);
         this.actionBar.bind('selectedTile', (e, o, v) => this.selectTile(e, o, v));
@@ -1781,6 +1786,33 @@ class GameScreen extends Widget {
         });
         this.addChild(this.nextButton);
         this.updateProperties({});
+    }
+    /**
+     * 
+     * @param {'horizontal'|'vertical'} orienation 
+     */
+    setLayoutForOrientation(orienation) {
+        if (orienation==='horizontal') {
+            this.board.hints = { right: 1, y: 0, w: '1h', h: 1 };
+            this.board.orientation = 'horizontal';
+            this.tileInfoPane.hints = { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 };
+            this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
+            this.scoreboard.hints = { right: 0.99, y: 0.01, w: 1, h: '1.0' };
+            this.statusLabel.hints = { x: 0.01, y: 0.01, w: 1, h: '1.0' };
+            this.actionBar.hints = {x: 0, y: '1.0', w: '0.14wh', h: 0.84 };
+            this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: '1.0' };
+            this.actionBar.orientation = 'vertical';
+        } else if (orienation==='vertical') {
+            this.board.hints = { center_x: 0.5, y: '2.0', w: 1, h: '1w' };
+            this.board.orientation = 'vertical';
+            this.tileInfoPane.hints = { x: 0, y: '1w', w: 1, h: 1 };
+            this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
+            this.scoreboard.hints = { right: 0.99, y: 0.0, w: 1, h: '1.0' };
+            this.statusLabel.hints = { x: 0.01, y: '1.0', w: 1, h: '1.0' };
+            this.actionBar.hints = {x: 0, bottom: 1, w: 1, h: '2.0' };
+            this.actionBar.orientation = 'horizontal';
+            this.nextButton.hints = { right: 0.99, y: '1.0', w: 0.1, h: '1.0' };
+        }
     }
     finishTurn() {
         if (this.activePlayer === 0) {
@@ -1888,7 +1920,7 @@ class GameScreen extends Widget {
                 this.actionBar.selectedTile = null;
                 this.displayTileNetworkInfo(player, terrain);
                 this.tileInfoPane.tile = terrain.tile;
-                this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
+                this.statusLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
                 return true;
             }
             this.tileInfoPane.tile = terrain.tile;
@@ -1896,7 +1928,7 @@ class GameScreen extends Widget {
         if (this.actionBar.selectedTile === null) {
             this.displayTileNetworkInfo(player, terrain);
             this.tileInfoPane.tile = null;
-            this.wStateLabel.text = 'Select a building';
+            this.statusLabel.text = 'Select a building';
             return true;
         }
         const tile = this.actionBar.selectedTile;
@@ -1953,7 +1985,7 @@ class GameScreen extends Widget {
         if (v === null) {
             this.clearPlacementTargets();
             this.tileInfoPane.tile = null;
-            this.wStateLabel.text = 'Select a building';
+            this.statusLabel.text = 'Select a building';
             return;
         }
         const player = this.players[this.activePlayer];
@@ -1961,7 +1993,7 @@ class GameScreen extends Widget {
         if (player.scoreMarker.tilesPlacedThisTurn < 5) {
             // this.actionBar.active = true;
             if (v) {
-                this.wStateLabel.text = 'Place ' + v.name;
+                this.statusLabel.text = 'Place ' + v.name;
                 this.setPlacementTargets(v.code);
                 this.tileInfoPane.tile = v;
             } else {
@@ -1973,7 +2005,7 @@ class GameScreen extends Widget {
             if (this.actionBar.active) this.actionBar.active = false;
             this.clearPlacementTargets();
             this.tileInfoPane.tile = null;
-            this.wStateLabel.text = 'End turn';
+            this.statusLabel.text = 'End turn';
         }
     }
 
@@ -2099,7 +2131,7 @@ class GameScreen extends Widget {
         if (!super.on_touch_down(e, o, touch)) {
             if (this.collide(touch.rect)) {
                 this.displayTileNetworkInfo(this.players[this.activePlayer], null);
-                this.wStateLabel.text = 'Select a building';
+                this.statusLabel.text = 'Select a building';
                 this.tileInfoPane.tile = null;
                 if (this.actionBar.selectedTile !== null) {
                     this.actionBar.selectedTile = null;
@@ -2254,8 +2286,8 @@ class GameScreen extends Widget {
      */
     setupGame(playerSpec, level = null) {
         this.gameOver = false;
-        this.wStateLabel.text = '';
-        this.wStateLabel.color = 'white';
+        this.statusLabel.text = '';
+        this.statusLabel.color = 'white';
         this.removePlayers();
         this.clearLevel();
 
@@ -2319,15 +2351,15 @@ class GameScreen extends Widget {
         if (p.localControl) {
             this.actionBar.active = true;
             if (p.scoreMarker.tilesPlacedThisTurn < 5) {
-                this.wStateLabel.text = 'Select a building';
-                this.wStateLabel.color = p.color;
+                this.statusLabel.text = 'Select a building';
+                this.statusLabel.color = p.color;
             } else {
-                this.wStateLabel.text = 'End turn';
-                this.wStateLabel.color = p.color;
+                this.statusLabel.text = 'End turn';
+                this.statusLabel.color = p.color;
             }
         } else {
-            this.wStateLabel.text = '';
-            this.wStateLabel.color = p.color;
+            this.statusLabel.text = '';
+            this.statusLabel.color = p.color;
         }
         p.startTurn(this);
     }
@@ -2345,14 +2377,14 @@ class GameScreen extends Widget {
             if (hiScore > 80) rating = 'The people are joyous!';
             if (hiScore > 90) rating = 'Welcome to the history books';
             if (hiScore > 100) rating = 'Hail to the king!';
-            this.wStateLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
-            this.wStateLabel.text = `Game over - ${rating}`;
+            this.statusLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
+            this.statusLabel.text = `Game over - ${rating}`;
         } else if (winners.length === 1) {
-            this.wStateLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
-            this.wStateLabel.text = `Game over - ${winners[0].name} wins`;
+            this.statusLabel.color = winners[0].color; //colorAverage([1,1,1,1], winners[0].color);
+            this.statusLabel.text = `Game over - ${winners[0].name} wins`;
         } else {
-            this.wStateLabel.color = 'white';
-            this.wStateLabel.text = 'Game over - draw';
+            this.statusLabel.color = 'white';
+            this.statusLabel.text = 'Game over - draw';
         }
     }
 
@@ -2367,6 +2399,12 @@ class GameScreen extends Widget {
     }
 
     layoutChildren() {
+        if (this.w < this.h) {
+            this.setLayoutForOrientation('vertical');
+        } else {
+            this.setLayoutForOrientation('horizontal');
+        }
+
         this.applyHints(this.board);
         this.board.layoutChildren();
         let hexSide = this.board.hexSide;
@@ -2396,8 +2434,8 @@ class GameScreen extends Widget {
         this.applyHints(this.actionBar);
         this.actionBar.layoutChildren();
 
-        this.applyHints(this.wStateLabel);
-        this.wStateLabel.layoutChildren();
+        this.applyHints(this.statusLabel);
+        this.statusLabel.layoutChildren();
 
         this.applyHints(this.nextButton);
         this.nextButton.layoutChildren();
@@ -2589,7 +2627,7 @@ class EnemyPlayer extends Player {
 }
 
 
-const colorLookup = {
+const playerColorLookup = {
     0: [0.6, 0, 0, 1],
     1: [0, 0.6, 0, 1],
     2: [0, 0, 0.6, 1],
@@ -2673,8 +2711,8 @@ class GameMenu extends BoxLayout {
     }
 
     startGame() {
-        let ps = new PlayerSpec('Player', colorLookup[0], 0);
-        let es = new PlayerSpec('Enemy', colorLookup[1], 1);
+        let ps = new PlayerSpec('Player', playerColorLookup[0], 0);
+        let es = new PlayerSpec('Enemy', playerColorLookup[1], 1);
         this.playerSpec = [ps, es];
         this.wGame.setupGame(this.playerSpec, levels[0]);
         this.wGame.startGame();
@@ -2696,22 +2734,11 @@ class GameMenu extends BoxLayout {
     }
 }
 
-class StatusLabel extends Label {
-    /**
-     * 
-     * @param {string} text 
-     * @param {string} bgColor 
-     * @param {string} color 
-     * @param {import('../eskv/lib/modules/widgets.js').WidgetSizeHints} hints 
-     */
-    constructor(text, bgColor, color, hints) {
-        super({ text: text, bgColor: bgColor, color: color, hints: hints });
-    }
-}
-
 class PuzzleKingdomApp extends App {
     constructor() {
         super();
+        this.prefDimH = 20;
+        this.prefDimW = 20;
         this._baseWidget.children = [
             new GameMenu({ hints: { x: 0, y: 0, w: 1, h: 1 } })
         ];
