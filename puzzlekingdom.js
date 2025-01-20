@@ -694,7 +694,7 @@ class Tile extends ImageWidget {
      */
     on_selected(event, object, value) {
         let parent = this.parent;
-        this.bgColor = value ? 'green' : null;
+        this.bgColor = value ? 'rgba(192,188,100, 1)' : null;
         if (!(parent instanceof GameScreen)) return;
         if (value) {
             let a = new WidgetAnimation();
@@ -1881,22 +1881,24 @@ class GameScreen extends Widget {
     onTouchDownTerrain(terrain, touch) {
         if (this.gameOver) return true;
         const player = this.players[this.activePlayer];
+        if (!player.localControl) return true;
         if (terrain.tile) {
             const verb = !(terrain.tile instanceof Rubble) && terrain.tile.needsFilled.meets(terrain.tile.needs) ? 'Active' : 'Inactive';
-            this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
-            if (!(terrain.tile instanceof Rubble)) {
+            if (!(terrain.tile instanceof Rubble && this.actionBar.selectedTile !== null)) {
                 this.actionBar.selectedTile = null;
                 this.displayTileNetworkInfo(player, terrain);
                 this.tileInfoPane.tile = terrain.tile;
+                this.wStateLabel.text = `${verb} ${tileNames[terrain.tile.code]}`;
                 return true;
             }
             this.tileInfoPane.tile = terrain.tile;
         }
         if (this.actionBar.selectedTile === null) {
             this.displayTileNetworkInfo(player, terrain);
+            this.tileInfoPane.tile = null;
+            this.wStateLabel.text = 'Select a building';
             return true;
         }
-        if (!player.localControl) return true;
         const tile = this.actionBar.selectedTile;
         const tileToPlace = new playerTileClasses[tile.code]();
         if (!this.canReach(player, terrain)) return true;
@@ -2097,6 +2099,8 @@ class GameScreen extends Widget {
         if (!super.on_touch_down(e, o, touch)) {
             if (this.collide(touch.rect)) {
                 this.displayTileNetworkInfo(this.players[this.activePlayer], null);
+                this.wStateLabel.text = 'Select a building';
+                this.tileInfoPane.tile = null;
                 if (this.actionBar.selectedTile !== null) {
                     this.actionBar.selectedTile = null;
                 }
