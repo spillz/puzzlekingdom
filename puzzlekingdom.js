@@ -161,13 +161,13 @@ const tileNames = {
 }
 
 const tileDescriptions = {
-    C: 'A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once active, castles connect their production links to the links of any other castles in range 3.',
+    C: 'A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each turn.',
     V: 'A village produces workers once provided with food.',
     A: 'An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.',
     F: 'A farm produces food once supplied with workers.',
     M: 'A mine produces ore once supplied with workers.',
     S: 'A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from active strongholds will attack enemies that they connect their resources to.',
-    T: 'A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once active, tradeships allow production links between all structures within reach of the Tradeship.',
+    T: 'A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.',
     X: 'Rubble is the remains of a structure or enemy that you can build over.',
     ET: 'An enemy tent is a temporary installation that expands enemy reach but does not attack.',
     ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.',
@@ -1263,8 +1263,9 @@ class NetworkTileOverlay extends Widget {
     }
     updateIO() {
         this.outlineColor = this.primary?'rgba(208, 212, 0,1)':'rgba(208, 212, 240,1)'; 
-        const inputColor = 'rgba(192,100,100,0.7)';
-        const outputColor = this.primary?'rgba(100,185,100,0.7)':'rgba(100,100,192,0.7)';
+        this.bgColor = this.primary? 'rgba(208, 212, 0, 0.5)':null;
+        const inputColor = 'rgba(192,100,100,0.9)';
+        const outputColor = this.primary?'rgba(100,185,100,0.9)':'rgba(100,100,192,0.9)';
         if (this.input!=='' && this.output!=='') {
             this.children = [
                 new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:inputColor}),
@@ -1950,7 +1951,7 @@ class GameScreen extends Widget {
         if (v === null) {
             this.clearPlacementTargets();
             this.tileInfoPane.tile = null;
-            this.wStateLabel.text = 'Select a building type';
+            this.wStateLabel.text = 'Select a building';
             return;
         }
         const player = this.players[this.activePlayer];
@@ -2314,7 +2315,7 @@ class GameScreen extends Widget {
         if (p.localControl) {
             this.actionBar.active = true;
             if (p.scoreMarker.tilesPlacedThisTurn < 5) {
-                this.wStateLabel.text = 'Select tile';
+                this.wStateLabel.text = 'Select a building';
                 this.wStateLabel.color = p.color;
             } else {
                 this.wStateLabel.text = 'End turn';
