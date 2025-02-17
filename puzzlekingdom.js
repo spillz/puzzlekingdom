@@ -60,6 +60,8 @@ import urlTileEnemyStronghold from './tiles/enemy_stronghold.png';
 //@ts-ignore
 import urlTileEnemyCastle from './tiles/enemy_castle.png';
 //@ts-ignore
+import urlTileEnemyLongboat from './tiles/enemy_longboat.png';
+//@ts-ignore
 import urlTileEnemyDragon from './tiles/enemy_dragon.png';
 //@ts-ignore
 import urlIconCheck from './tiles/icon_check.png';
@@ -116,6 +118,7 @@ const gameImages = {
     'ES': urlTileEnemyStronghold,
     'EC': urlTileEnemyCastle,
     'ED': urlTileEnemyDragon,
+    'EL': urlTileEnemyLongboat,
     'rw': urlResourceWorker,
     'rf': urlResourceFood,
     'rt': urlResourceTimber,
@@ -129,7 +132,7 @@ const gameImages = {
 /**@typedef {'p'|'f'|'m'|'w'} TerrainType */
 /**@typedef {'rf'|'rw'|'rm'|'rs'|'rt'|'ro'|'rb'|'ri'} ResourceType */
 /**@typedef {'C'|'V'|'A'|'F'|'M'|'S'|'T'|'X'} TileType */
-/**@typedef {'ET'|'ES'|'EC'|'ED'} EnemyTileType */
+/**@typedef {'ET'|'ES'|'EC'|'ED'|'EL'} EnemyTileType */
 /**@typedef {{[id in ResourceType]?:number}} ProductionQuantityObj */
 /**@typedef {ProductionQuantity|ProductionQuantityObj} ProductionQuantityLike */
 /**@typedef {{[id in ResourceType]?:Tile[]}} ProductionChainObj */
@@ -158,6 +161,7 @@ const tileNames = {
     ES: 'enemy stronghold',
     EC: 'enemy castle',
     ED: 'enemy dragon',
+    EL: 'enemy longboat',
 }
 
 const tileDescriptions = {
@@ -172,6 +176,7 @@ const tileDescriptions = {
     ET: 'An enemy tent is a temporary installation that expands enemy reach but does not attack.',
     ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.',
     EC: 'enemy castle',
+    EL: 'enemy longboat',
     ED: 'An enemy dragon lives in mountains and will attack structures in range 2 at the end of each turn.',
 }
 
@@ -997,10 +1002,64 @@ class EnemyStronghold extends Tile {
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
     textColor = 'red';
-    health = 1;
+    health = 2;
     constructor(props = {}) {
         super();
         this.src = urlTileEnemyStronghold;
+        this.updateProperties(props);
+    }
+    /**@type {Tile['draw']} */
+    draw(app, ctx) {
+        super.draw(app, ctx);
+    }
+}
+
+class EnemyCastle extends Tile {
+    code = /**@type {TileType}*/('EC');
+    name = 'Enemy Castle';
+    terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
+    tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
+    textColor = 'red';
+    health = 5;
+    constructor(props = {}) {
+        super();
+        this.src = urlTileEnemyCastle;
+        this.updateProperties(props);
+    }
+    /**@type {Tile['draw']} */
+    draw(app, ctx) {
+        super.draw(app, ctx);
+    }
+}
+
+class EnemyLongboat extends Tile {
+    code = /**@type {TileType}*/('EL');
+    name = 'Enemy Castle';
+    terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 1 };
+    tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
+    textColor = 'red';
+    health = 5;
+    constructor(props = {}) {
+        super();
+        this.src = urlTileEnemyLongboat;
+        this.updateProperties(props);
+    }
+    /**@type {Tile['draw']} */
+    draw(app, ctx) {
+        super.draw(app, ctx);
+    }
+}
+
+class EnemyTent extends Tile {
+    code = /**@type {TileType} */('ET');
+    name = 'Enemy Tent';
+    terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
+    tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
+    textColor = 'red';
+    health = 1;
+    constructor(props = {}) {
+        super();
+        this.src = urlTileEnemyTent;
         this.updateProperties(props);
     }
     /**@type {Tile['draw']} */
@@ -1015,7 +1074,7 @@ class EnemyDragon extends Tile {
     terrainPlacement = { 'p': null, 'f': null, 'm': 2, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
     textColor = 'red';
-    health = 2;
+    health = 3;
     constructor(props = {}) {
         super();
         this.src = urlTileEnemyDragon;
@@ -1637,6 +1696,28 @@ class Board extends Widget {
         }
     }
 
+    /**
+     * 
+     * @param {[number, number]} hexPos 
+     * @param {number} range
+     * @param {Set<TerrainHex>} visited 
+     * @yields {TerrainHex}
+     */
+    *neighborIterInRange(hexPos, range, visited = new Set()) {
+        const terr = this.terrainMap.atPos(hexPos[0], hexPos[1]);
+        if (!terr) return;
+        visited.add(terr);
+        for (let t of this.neighborIter(hexPos)) {
+            if (visited.has(t)) continue;
+            yield t;
+            if (range>1) {
+                yield *this.neighborIterInRange(t.hexPos, range-1, visited);
+            }
+        }
+
+    }
+
+
     getNeighborCount(hexPos) {
         let value = 0;
         for (let t of this.neighborIter(hexPos)) {
@@ -2257,16 +2338,38 @@ class GameScreen extends Widget {
         }
         if (this.level === null) return;
         this.board.makeTerrain(this.level);
-        let p = this.players[this.activePlayer]
-        if (!p) return; //throw new Error("No active player found");
+        if (!this.board.terrainMap) return;
+
+        let p = this.players[0];
+        let ep = this.players[1];
+        if (!p || !ep) return; //throw new Error("No active player found");
 
         this.tileStack = [...this.level.tileSet].map(t => new playerTileClasses[t]());
         this.tileStack.sort(() => Math.random() - 0.5);
         let startTile = new playerTileClasses[this.level.startTile]();
+        let start = new Vec2(this.level.start);
 
-        if (this.board.terrainMap && this.level) {
-            let terr = this.board.terrainMap.atPos(this.level.start[0], this.level.start[1]);
-            if (terr) this.placeTile(p, terr, startTile, false, false);
+        let startTerr = this.board.terrainMap.atPos(start[0], start[1]);
+        if (startTerr === undefined) return;
+        this.placeTile(p, startTerr, startTile, false, false);
+
+        let furthest = 0;
+        let enemyCandidates = [];
+        for (let terr of this.board.terrainMap.iter()) {
+            if (terr instanceof Water) continue;
+            const dist = new Vec2(terr.hexPos).sub(new Vec2(startTerr.hexPos)).abs().sum();
+            if (dist===furthest) {
+                enemyCandidates.push(terr);
+            } else if (dist>furthest) {
+                enemyCandidates = [terr];
+                furthest = dist;
+            }
+        }
+
+        if (enemyCandidates.length>0) {
+            const enemyStartTerr = rand.choose(enemyCandidates);
+            let enemyStartTile = new EnemyCastle();
+            this.placeTile(ep, enemyStartTerr, enemyStartTile, true, false, false);
         }
 
         this.actionBar.addChild(new Farm());
@@ -2274,7 +2377,6 @@ class GameScreen extends Widget {
         this.actionBar.addChild(new Mine());
         this.actionBar.addChild(new Abbey());
         this.actionBar.addChild(new Tradeship());
-        // this.actionBar.addChild(new Market());
         this.actionBar.addChild(new Stronghold());
         this.actionBar.addChild(new Castle());
     }
@@ -2311,7 +2413,7 @@ class GameScreen extends Widget {
     nextPlayer() {
         if (this.activePlayer === 0) {
             this.players[this.activePlayer].endTurn(this);
-            const player = this.players[this.activePlayer];
+            const player = this.players[0];
             const enemyPlayer = this.players[1];
             for (let t of player.placedTiles) {
                 const terrain = this.board.terrainMap.atPos(t.hexPos[0], t.hexPos[1]);
@@ -2567,7 +2669,7 @@ class Player extends EventSink {
 }
 
 class EnemyPlayer extends Player {
-    maxTiles = 3;
+    maxTiles = 13;
     localControl = false;
     /**
      * 
@@ -2594,31 +2696,89 @@ class EnemyPlayer extends Player {
                 }
             }
         }
-        if (this.placedTiles.reduce((p,c)=>p+(c instanceof Rubble?0:1), 0) < this.maxTiles) {
-            for (let terr of rand.shuffle([...board.terrainMap.iter()])) {
-                if (terr.tile === null) {
-                    for (let adjTerr of board.neighborIter(terr.hexPos)) {
-                        if (adjTerr.tile !== null && !this.placedTiles.includes(adjTerr.tile)) {
-                            /**@type {Tile|null} */
-                            let tile = null;
-                            switch (terr.code) {
-                                case 'p':
-                                case 'f':
-                                    tile = new EnemyStronghold();
-                                    break;
-                                case 'm':
-                                    tile = new EnemyDragon();
-                                    break;
-                            }
-                            if (tile !== null) {
-                                this.placedTiles.push(tile);
-                                terr.tile = tile;
-                                tile.place(terr, board.pixelPos(terr.hexPos), this, board);
-                                screen.finishTurn();
-                                return;
-                            }
-                        }
+        /**
+         * 
+         * @param {Player} p 
+         * @param {Player} op 
+         */
+        function nearestTiles(p, op) {
+            let nearest = Infinity;
+            let nearTiles = /**@type {[Tile, Tile][]}*/([]); 
+            for (let t of p.placedTiles) {
+                for (let o of op.placedTiles) {
+                    const dist = new Vec2(t.hexPos).sub(o.hexPos).abs().sum();
+                    if (dist < nearest) {
+                        nearTiles = [[t,o]];
+                        nearest = dist;
+                    } else if (dist === nearest) {
+                        nearTiles.push([t,o]);
                     }
+                }
+            }
+            return {nearest, nearTiles};
+        }
+        /**
+         * 
+         * @param {Board} board 
+         * @param {[number, number]} hexPos
+         * @param {Player} op
+         * @param {boolean} excludeWater
+         */
+        function nearestEmptyTerrain(board, hexPos, op, excludeWater=false) {
+            let nearest = Infinity;
+            let nearTerrain = /**@type {Set<TerrainHex>}*/(new Set()); 
+            for (let terr of board.neighborIter(hexPos)) {
+                if (excludeWater && terr instanceof Water) continue; 
+                if (terr.tile !== null) continue;
+                for (const ot of op.placedTiles) {
+                    const dist = new Vec2(terr.hexPos).sub(ot.hexPos).abs().sum(); 
+                    if (dist < nearest) {
+                        nearTerrain.clear();
+                        nearTerrain.add(terr)
+                        nearest = dist;
+                    } else if (dist === nearest) {
+                        nearTerrain.add(terr);
+                    }
+                }
+            }
+            return {nearest, nearTerrain};
+        }
+        if (this.placedTiles.filter((t)=>!(t instanceof Rubble)).length<this.maxTiles) {
+            const ntData = nearestTiles(this, otherPlayer);
+            const nearest = ntData.nearest;
+            const nearTiles = ntData.nearTiles;
+            const [t, ot] = rand.choose(nearTiles);
+            if (t instanceof EnemyCastle) {
+                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer)
+                const newTerr = rand.choose([...nltData.nearTerrain]);
+                if (newTerr instanceof Water) {
+                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                } else if (newTerr) {
+                    screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
+                }
+            } else if (t instanceof EnemyStronghold) {
+                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer)
+                const newTerr = rand.choose([...nltData.nearTerrain]);
+                if (newTerr instanceof Water) {
+                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                } else if (newTerr) {
+                    screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
+                }
+            } else if (t instanceof EnemyLongboat) {
+                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer);
+                const newTerr = rand.choose([...nltData.nearTerrain]);
+                if (newTerr instanceof Water) {
+                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                } else if (newTerr) {
+                    screen.placeTile(this, newTerr, new EnemyStronghold(), true, false, false);
+                }
+            } else if (t instanceof EnemyTent) {
+                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer);
+                const newTerr = rand.choose([...nltData.nearTerrain]);
+                if (newTerr instanceof Water) {
+                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                } else if (newTerr) {
+                    screen.placeTile(this, newTerr, new EnemyStronghold(), true, false, false);
                 }
             }
         }
@@ -2632,7 +2792,7 @@ const playerColorLookup = {
     1: [0, 0.6, 0, 1],
     2: [0, 0, 0.6, 1],
     3: [0.5, 0, 0.5, 1],
-    4: [0.5, 0.5, 0, 1]
+    4: [0.5, 0.5, 0, 1],
 };
 
 // class LevelHex extends ImageWidget {
