@@ -760,6 +760,13 @@ class Tile extends ImageWidget {
         }
         this.iconBox.children = iconsToAdd;
     }
+    /**
+     * 
+     * @param {Board} board 
+     */
+    *iterNetwork(board) {
+        for (let t of board.neighborIter(this.hexPos)) yield t;
+    }
 }
 
 /**
@@ -900,14 +907,13 @@ class Mine extends Tile {
     }
 }
 
-
 class Tradeship extends Tile {
     code = /**@type {TileType}*/('T');
     name = 'Tradeship';
     terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 0 };
     tileColor = colorString([0.4, 0.2, 0.2, 1.0]);
     textColor = 'white';
-    ports = /**@type {Set<TerrainHex>} */(new Set());
+    network = /**@type {Set<TerrainHex>} */(new Set());
     constructor(props = {}) {
         super();
         this.src = gameImages['T'];
@@ -922,8 +928,8 @@ class Tradeship extends Tile {
     /** @type {Tile['place']} */
     place(terr, centerPos, player, board) {
         super.place(terr, centerPos, player, board);
-        this.ports = new Set([terr]);
-        this.updatePorts(terr, board, 3, this.ports, new Set([terr]));
+        this.network = new Set([terr]);
+        this.updateNetwork(terr, board, 3, this.network);
     }
     /**
      * 
@@ -931,14 +937,12 @@ class Tradeship extends Tile {
      * @param {TerrainHex} terr
      * @param {number} range 
      * @param {Set<TerrainHex>} ports 
-     * @param {Set<TerrainHex>} visited 
      */
-    updatePorts(terr, board, range, ports, visited) {
+    updateNetwork(terr, board, range, ports) {
         /**@type {TerrainHex[]} */
         const newPorts = [];
         for (let t of board.neighborIter(terr.hexPos)) {
-            if (!visited.has(t)) {
-                visited.add(t);
+            if (!ports.has(t)) {
                 ports.add(t);
                 newPorts.push(t);
             }
@@ -946,7 +950,7 @@ class Tradeship extends Tile {
         if (range > 1) {
             for (let t of newPorts) {
                 if (t instanceof Water) {
-                    this.updatePorts(t, board, range - 1, ports, visited);
+                    this.updateNetwork(t, board, range - 1, ports);
                 }
             }
         }
@@ -1008,6 +1012,9 @@ class EnemyStronghold extends Tile {
         this.src = urlTileEnemyStronghold;
         this.updateProperties(props);
     }
+    get needs() {
+        return ProductionQuantity.from({ 'rs': this.health });
+    }
     /**@type {Tile['draw']} */
     draw(app, ctx) {
         super.draw(app, ctx);
@@ -1026,6 +1033,9 @@ class EnemyCastle extends Tile {
         this.src = urlTileEnemyCastle;
         this.updateProperties(props);
     }
+    get needs() {
+        return ProductionQuantity.from({ 'rs': this.health });
+    }
     /**@type {Tile['draw']} */
     draw(app, ctx) {
         super.draw(app, ctx);
@@ -1038,15 +1048,56 @@ class EnemyLongboat extends Tile {
     terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 1 };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
     textColor = 'red';
-    health = 5;
+    health = 1;
+    network = /**@type {Set<TerrainHex>}*/(new Set());
     constructor(props = {}) {
         super();
         this.src = urlTileEnemyLongboat;
         this.updateProperties(props);
     }
+    get needs() {
+        return ProductionQuantity.from({ 'rs': this.health });
+    }
     /**@type {Tile['draw']} */
     draw(app, ctx) {
         super.draw(app, ctx);
+    }
+    /**
+     * 
+     * @param {Board} board 
+     * @param {TerrainHex} terr
+     * @param {number} range 
+     * @param {Set<TerrainHex>} ports 
+     */
+    updateNetwork(terr, board, range, ports) {
+        /**@type {TerrainHex[]} */
+        const newPorts = [];
+        for (let t of board.neighborIter(terr.hexPos)) {
+            if (!ports.has(t)) {
+                ports.add(t);
+                newPorts.push(t);
+            }
+        }
+        if (range > 1) {
+            for (let t of newPorts) {
+                if (t instanceof Water) {
+                    this.updateNetwork(t, board, range - 1, ports);
+                }
+            }
+        }
+    }
+    /** @type {Tile['place']} */
+    place(terr, centerPos, player, board) {
+        super.place(terr, centerPos, player, board);
+        this.network = new Set([terr]);
+        this.updateNetwork(terr, board, 3, this.network);
+    }
+    /**
+     * 
+     * @param {Board} board 
+     */
+    *iterNetwork(board) {
+        for (let t of this.network) yield t;
     }
 }
 
@@ -1056,15 +1107,56 @@ class EnemyTent extends Tile {
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
     textColor = 'red';
+    network = /**@type {Set<TerrainHex>}*/(new Set());
     health = 1;
     constructor(props = {}) {
         super();
         this.src = urlTileEnemyTent;
         this.updateProperties(props);
     }
+    get needs() {
+        return ProductionQuantity.from({ 'rs': this.health });
+    }
     /**@type {Tile['draw']} */
     draw(app, ctx) {
         super.draw(app, ctx);
+    }
+    /**
+     * 
+     * @param {Board} board 
+     * @param {TerrainHex} terr
+     * @param {number} range 
+     * @param {Set<TerrainHex>} sites 
+     */
+    updateNetwork(terr, board, range, sites) {
+        /**@type {TerrainHex[]} */
+        const newSites = [];
+        for (let t of board.neighborIter(terr.hexPos)) {
+            if (!sites.has(t)) {
+                sites.add(t);
+                newSites.push(t);
+            }
+        }
+        if (range > 1) {
+            for (let t of newSites) {
+                if (!(t instanceof Water)) {
+                    this.updateNetwork(t, board, range - 1, sites);
+                }
+            }
+        }
+    }
+    /** @type {Tile['place']} */
+    place(terr, centerPos, player, board) {
+        super.place(terr, centerPos, player, board);
+        this.network = new Set([terr]);
+        this.updateNetwork(terr, board, 2, this.network);
+    }
+    /**
+     * 
+     * @param {Board} board 
+     */
+    *iterNetwork(board) {
+        for (let t of this.network) yield t;
     }
 }
 
@@ -1079,6 +1171,9 @@ class EnemyDragon extends Tile {
         super();
         this.src = urlTileEnemyDragon;
         this.updateProperties(props);
+    }
+    get needs() {
+        return ProductionQuantity.from({ 'rs': 1 });
     }
     /**@type {Tile['draw']} */
     draw(app, ctx) {
@@ -1141,7 +1236,6 @@ class TerrainHex extends ImageWidget {
     tile = null;
     /**@type {"vertical"|"horizontal"} */
     orientation = "vertical";
-
     constructor(props = null) {
         super({});
         if (props !== null) {
@@ -1150,7 +1244,6 @@ class TerrainHex extends ImageWidget {
         this.tile = null;
         this.allowStretch = true;
     }
-
     on_orientation(object, event, value) {
         if (this.orientation === "vertical") {
             this.src = gameImages[this.code]
@@ -1158,7 +1251,6 @@ class TerrainHex extends ImageWidget {
             this.src = gameImages[this.code + "l"];
         }
     }
-
     on_code(object, event, value) {
         if (this.orientation === "vertical") {
             this.src = gameImages[this.code]
@@ -1166,16 +1258,13 @@ class TerrainHex extends ImageWidget {
             this.src = gameImages[this.code + "l"];
         }
     }
-
     /**@type {[number, number]} */
     get hexPos() {
         return [this.hexPosX, this.hexPosY];
     }
-
     set hexPos(pos) {
         [this.hexPosX, this.hexPosY] = pos;
     }
-
     on_tile(e, o, v) {
         if (this.tile) {
             this.children = [this.tile];
@@ -1183,7 +1272,6 @@ class TerrainHex extends ImageWidget {
             this.children = [];
         }
     }
-
     on_touch_down(event, object, touch) {
         if (this.collideRadius(touch.rect, this.w * 0.43)) { //TODO: Scale it
             let gameScreen = this.parent?.parent;
@@ -1492,11 +1580,6 @@ class TileInfoPane extends Widget {
     }
 }
 
-
-// class ScoreBoard extends BoxLayout {
-
-// }
-
 class Board extends Widget {
     /**@type {number} Height and max width of the board in number of hexes  */
     boardSize = 1;
@@ -1566,7 +1649,6 @@ class Board extends Widget {
 
         }
     }
-
     hexPos(pixelPos) {
         if (this.orientation === "vertical") {
             const hpos = Math.round((pixelPos[0] - this.center_x) / (this.hexSide * 1.5) + Math.floor(this.boardSize / 2));
@@ -1628,14 +1710,11 @@ class Board extends Widget {
         // If the terrain is in a port we return all other terrain served by the Tradeship
         for (let ship of player.placedTiles) {
             if (ship instanceof Tradeship) {
-                if (!ship.ports.has(terr)) continue;
-                for (let tp of ship.ports) {
+                if (!ship.network.has(terr)) continue;
+                for (let tp of ship.network) {
                     if (visited.has(tp)) continue;
                     yield tp;
                     visited.add(tp);
-                    // if (tp.tile !== null && tp.tile instanceof Castle) {
-                    //     castles.add(tp);
-                    // }
                 }
             }
         }
@@ -1716,8 +1795,6 @@ class Board extends Widget {
         }
 
     }
-
-
     getNeighborCount(hexPos) {
         let value = 0;
         for (let t of this.neighborIter(hexPos)) {
@@ -1727,7 +1804,6 @@ class Board extends Widget {
         }
         return value;
     }
-
     layoutChildren() {
         this.hexSide = Math.min(
             this.w / (1.5 * this.boardSize + 1),
@@ -1787,7 +1863,6 @@ class ActionBar extends BoxLayout {
                 this.selectedTile = null;
             }
         }
-
     }
     /**
      * 
@@ -1813,7 +1888,6 @@ class ActionBar extends BoxLayout {
             });
         }
     }
-
     on_selectedTile(e, o, v) {
         for (let c of this.children) /**@type {Tile}*/(c).selected = false;
         if (this.selectedTile !== null) {
@@ -1967,12 +2041,12 @@ class GameScreen extends Widget {
             const terr = this.board.terrainMap.atPos(t.hexPos[0], t.hexPos[1]);
             if (terr === undefined) continue;
             // if (t instanceof Tradeship) {
-            //     t.ports = new Set([terr]);
-            //     t.updatePorts(terr, this.board, 3, t.ports, new Set([terr]));
+            //     t.network = new Set([terr]);
+            //     t.updatePorts(terr, this.board, 3, t.network);
             // }
             if (t instanceof Castle) {
                 t.network = new Set([terr]);
-                t.updateNetwork(terr, this.board, 3, t.network, new Set());
+                t.updateNetwork(terr, this.board, 3, t.network);
             }
         }
         this.tileInfoPane.tile = tile;
@@ -2037,7 +2111,7 @@ class GameScreen extends Widget {
             }
             //All port terrain
             if (t instanceof Tradeship) {
-                for (let port of t.ports) {
+                for (let port of t.network) {
                     reachable.add(port);
                 }
             }
@@ -2091,15 +2165,16 @@ class GameScreen extends Widget {
     }
 
     updateResourceProduction() {
-        const player = this.players[this.activePlayer];
-        if (!player) return;
+        const player = this.players[0];
+        const enemy = this.players[1];
+        if (!player || !enemy) return;
         // /**@type {ProductionChain} */
         // let totalProd = ProductionChain.from({});
-        const placedTiles = [...player.placedTiles];
+        const placedTiles = [...player.placedTiles, ...enemy.placedTiles];
         placedTiles.sort((a,b)=>tilePriority[a.code]-tilePriority[b.code]);
         const reversePlacedTiles = [...placedTiles];
         reversePlacedTiles.reverse();
-        for (let tile of player.placedTiles) {
+        for (let tile of placedTiles) {
             tile.needsFilled.clear();
             tile.productionFilled.clear();
         }
@@ -2113,7 +2188,7 @@ class GameScreen extends Widget {
         }
         let loops = 0;
         console.log('==============Starting resource production allocation==============');
-        while (changes && loops<1000) {
+        while (changes && loops<10) {
             ++loops;
             console.log('--------------Loop', loops, '-----------------------------------------------');
             changes = false;
@@ -2202,7 +2277,7 @@ class GameScreen extends Widget {
             console.log('Exceeded loop limit during resource produciton allocation');
         }
 
-        for (let tile of player.placedTiles) {
+        for (let tile of placedTiles) {
             // totalProd = totalProd.add(tile.productionRequested);
             tile.updateResourceStatusIcons();
         }
@@ -2422,11 +2497,12 @@ class GameScreen extends Widget {
                     for (let eterr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
                         const etile = eterr.tile;
                         if (etile) {
-                            if (etile instanceof EnemyDragon || etile instanceof EnemyStronghold) {
+                            if (etile instanceof EnemyDragon || etile instanceof EnemyStronghold || etile instanceof EnemyTent || etile instanceof EnemyCastle || etile instanceof EnemyLongboat) {
                                 etile.health--;
                                 if (etile.health <= 0) {
                                     const rubble = new Rubble();
                                     this.placeTile(enemyPlayer, eterr, rubble, true, false);
+                                    player.scoreMarker.score += 1;
                                 }
                             }
                         }
@@ -2720,14 +2796,14 @@ class EnemyPlayer extends Player {
         /**
          * 
          * @param {Board} board 
-         * @param {[number, number]} hexPos
+         * @param {Tile} tile
          * @param {Player} op
          * @param {boolean} excludeWater
          */
-        function nearestEmptyTerrain(board, hexPos, op, excludeWater=false) {
+        function nearestEmptyTerrain(board, tile, op, excludeWater=false) {
             let nearest = Infinity;
             let nearTerrain = /**@type {Set<TerrainHex>}*/(new Set()); 
-            for (let terr of board.neighborIter(hexPos)) {
+            for (let terr of tile.iterNetwork(board)) {
                 if (excludeWater && terr instanceof Water) continue; 
                 if (terr.tile !== null) continue;
                 for (const ot of op.placedTiles) {
@@ -2749,7 +2825,7 @@ class EnemyPlayer extends Player {
             const nearTiles = ntData.nearTiles;
             const [t, ot] = rand.choose(nearTiles);
             if (t instanceof EnemyCastle) {
-                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer)
+                const nltData = nearestEmptyTerrain(board, t, otherPlayer)
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
                     screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
@@ -2757,7 +2833,7 @@ class EnemyPlayer extends Player {
                     screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
                 }
             } else if (t instanceof EnemyStronghold) {
-                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer)
+                const nltData = nearestEmptyTerrain(board, t, otherPlayer)
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
                     screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
@@ -2765,7 +2841,7 @@ class EnemyPlayer extends Player {
                     screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
                 }
             } else if (t instanceof EnemyLongboat) {
-                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer);
+                const nltData = nearestEmptyTerrain(board, t, otherPlayer);
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
                     screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
@@ -2773,7 +2849,7 @@ class EnemyPlayer extends Player {
                     screen.placeTile(this, newTerr, new EnemyStronghold(), true, false, false);
                 }
             } else if (t instanceof EnemyTent) {
-                const nltData = nearestEmptyTerrain(board, t.hexPos, otherPlayer);
+                const nltData = nearestEmptyTerrain(board, t, otherPlayer);
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
                     screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
