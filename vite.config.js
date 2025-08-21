@@ -18,9 +18,14 @@ export default {
       //   brotliSize: true,
       // })
     ],
+    esbuild: {
+        pure: ['console.log'],    // example: have esbuild remove any console.log
+        minifyIdentifiers: false, // but keep variable names
+    },
     base: './',
     build: {
-      target: 'es2019', //es2019
+      outDir: '../spillz.github.io/island-chains',
+      target: 'es2020', //es2019
       minify: false,
     }
 };

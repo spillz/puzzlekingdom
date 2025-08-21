@@ -1,10 +1,10 @@
 //@ts-check
 
-import { App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math, rand, Button, EventSink, vec2 } from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
+import { App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math, rand, Button, EventSink, vec2, ModalView } from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
 import { colorString } from '../eskv/lib/modules/math.js';
 import { Touch } from '../eskv/lib/modules/input.js';
 
-rand.setPRNG('jsf32');
+rand.setPRNG('mulberry32');
 rand.setSeed(Date.now());
 
 //@ts-ignore
@@ -175,15 +175,15 @@ const tileDescriptions = {
     X: 'Rubble is the remains of a structure or enemy that you can build over.',
     ET: 'An enemy tent is a temporary installation that expands enemy reach but does not attack.',
     ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.',
-    EC: 'enemy castle',
-    EL: 'enemy longboat',
+    EC: 'The enemy castle.',
+    EL: 'The enemy longboat allows enemy units to travel over water.',
     ED: 'An enemy dragon lives in mountains and will attack structures in range 2 at the end of each turn.',
 }
 
 /**@type {{[id in ResourceType]:string}} */
 const resourceNames = {
     rf: 'food',
-    rw: 'wood',
+    rw: 'worker',
     rm: 'money',
     rs: 'military strength',
     rt: 'timber',
@@ -247,7 +247,7 @@ class ProductionChain extends Map {
      */
     addConnection(resource, connection) {
         const arr = this.get(resource);
-        if (arr!==undefined) {
+        if (arr !== undefined) {
             if (!arr.includes(connection)) {
                 arr.push(connection);
                 return true;
@@ -265,8 +265,8 @@ class ProductionChain extends Map {
      */
     removeConnection(resource, connection) {
         if (this.has(resource)) {
-            const arr = this.get(resource)??[];
-            if (arr.length>1) {
+            const arr = this.get(resource) ?? [];
+            if (arr.length > 1) {
                 const index = arr.indexOf(connection);
                 if (index >= 0) {
                     arr.splice(index, 1);
@@ -286,7 +286,7 @@ class ProductionChain extends Map {
     meets(quantity) {
         for (let r of quantity.keys()) {
             const q = quantity.get(r);
-            if (q !== undefined && q !== 0 && (this.get(r)??[]).length < q) return false;
+            if (q !== undefined && q !== 0 && (this.get(r) ?? []).length < q) return false;
         }
         return true;
     }
@@ -652,10 +652,10 @@ class Tile extends ImageWidget {
     productionFilled = ProductionChain.from({});
     needsFilled = ProductionChain.from({});
     constructor() {
-        super({});
+        super();
         /**@type {Label|null} */
         this.wLabel = null;
-        this.iconBox = new BoxLayout({ orientation: "horizontal", hints: { w: 1, h: 0.4, x: 0, y: 0 } })
+        this.iconBox = BoxLayout.a({ orientation: "horizontal", hints: { w: 1, h: 0.4, x: 0, y: 0 } })
         this.addChild(this.iconBox);
     }
     get productionCapacity() {
@@ -726,12 +726,11 @@ class Tile extends ImageWidget {
         for (let n of this.needs.keys()) {
             const minAmt = this.needs.get(n)
             if (minAmt !== undefined && minAmt > 0 && this.needsFilled.get(n)?.length !== minAmt) {
-                const icon = new ImageWidget({
-                    src: gameImages[n],
-                    hints: { h: 0.5, w: '1wh' },
-                    bgColor: 'rgba(90,0,0,0.6)',
-                    outlineColor: 'rgb(90,0,0)',
-                });
+                const icon = ImageWidget.a({});
+                icon.src = gameImages[n];
+                icon.hints = { h: 0.5, w: '1wh' };
+                icon.bgColor = 'rgba(90,0,0,0.6)';
+                icon.outlineColor = 'rgb(90,0,0)';
                 iconsToAdd.push(icon);
                 needsFilled = false;
             }
@@ -744,7 +743,7 @@ class Tile extends ImageWidget {
                     'rgb(0,80,0)' : 'rgb(0,0,60)';
                 const connectedTiles = this.productionFilled.get(n);
                 if (connectedTiles === undefined || connectedTiles.length !== this.productionCapacity.get(n)) {
-                    const icon = new ImageWidget({
+                    const icon = ImageWidget.a({
                         src: gameImages[n],
                         hints: { h: 0.5, w: '1wh' },
                         bgColor: color,
@@ -756,7 +755,7 @@ class Tile extends ImageWidget {
         }
         const size = iconsToAdd.length;
         for (let i of iconsToAdd) {
-            i.hints['h'] = size===1? 0.7 : 0.7 / (size-1);
+            i.hints['h'] = size === 1 ? 0.7 : 0.7 / (size - 1);
         }
         this.iconBox.children = iconsToAdd;
     }
@@ -809,7 +808,7 @@ class Castle extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'ri': 1 + this.prodBonus});
+        return ProductionQuantity.from({ 'ri': 1 + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'rw': 1, 'rf': 1, 'rb': 1 });
@@ -881,7 +880,7 @@ class Stronghold extends Tile {
         this.updateProperties(props);
     }
     get productionCapacity() {
-        return ProductionQuantity.from({ 'rs': 1 + this.prodBonus});
+        return ProductionQuantity.from({ 'rs': 1 + this.prodBonus });
     }
     get needs() {
         return ProductionQuantity.from({ 'ro': 1, 'rw': 1 });
@@ -990,7 +989,7 @@ class Farm extends Tile {
     get productionCapacity() {
         const blessed = this.needsFilled.get('rb') ? 2 : 1;
         if (this.parent instanceof Forest) {
-            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus, 'rt': 1 * blessed});
+            return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus, 'rt': 1 * blessed });
         } else {
             return ProductionQuantity.from({ 'rf': 1 * blessed + this.prodBonus });
         }
@@ -1203,7 +1202,7 @@ class TargetTile extends Label {
         ctx.arc(this.center_x, this.center_y, this.w / 3, 0, 2 * Math.PI);
         ctx.fillStyle = this.score >= 0 ? 'rgba(255,240,0,0.5)' :
             // this.score === 0 ? 'rgba(100,100,100,0.5)' :
-                'rgba(168,72,65,0.75)';
+            'rgba(168,72,65,0.75)';
         ctx.strokeStyle = 'rgba(80,80,80,0.5)';
         ctx.lineWidth = this.w / 10;
         ctx.stroke();
@@ -1237,7 +1236,7 @@ class TerrainHex extends ImageWidget {
     /**@type {"vertical"|"horizontal"} */
     orientation = "vertical";
     constructor(props = null) {
-        super({});
+        super();
         if (props !== null) {
             this.updateProperties(props);
         }
@@ -1349,7 +1348,7 @@ class TerrainMap extends Array {
         for (let x = 0; x < this.size; x++) {
             let yHeight = this.size - Math.abs((this.size - 1) / 2 - x);
             for (let y = 0; y < yHeight; y++) {
-                let ht = new terrainClasses[terrainmap[i]]({ hexPos: [x, y] });
+                let ht = terrainClasses[terrainmap[i]].a({ hexPos: [x, y] });
                 ht.orientation = orientation;
                 this[x].push(ht);
                 i++;
@@ -1389,44 +1388,33 @@ class TerrainMap extends Array {
 }
 
 class NetworkTileOverlay extends Widget {
-    /**
-     * 
-     * @param {number} hexSide 
-     * @param {[number, number]} hexPos 
-     * @param {ResourceType|''} input 
-     * @param {ResourceType|''} output 
-     * @param {boolean} primary
-     */
-    constructor(hexSide, hexPos, input, output, primary=false) {
+    hexPos = [0, 0];
+    primary = false;
+    input = '';
+    output = '';
+    constructor() {
         super();
-        this.w = hexSide;
-        this.h = hexSide;
-        this.hexPos = hexPos.slice();
-        this.updateProperties({});
-        this.primary = primary;
-        this.input = input;
-        this.output = output;
         this.updateIO();
     }
     updateIO() {
-        this.outlineColor = this.primary?'rgba(208, 212, 0,1)':'rgba(208, 212, 240,1)'; 
-        this.bgColor = this.primary? 'rgba(208, 212, 0, 0.5)':null;
+        this.outlineColor = this.primary ? 'rgba(208, 212, 0,1)' : 'rgba(208, 212, 240,1)';
+        this.bgColor = this.primary ? 'rgba(208, 212, 0, 0.5)' : null;
         const inputColor = 'rgba(192,100,100,0.9)';
-        const outputColor = this.primary?'rgba(100,185,100,0.9)':'rgba(100,100,192,0.9)';
-        if (this.input!=='' && this.output!=='') {
+        const outputColor = this.primary ? 'rgba(100,185,100,0.9)' : 'rgba(100,100,192,0.9)';
+        if (this.input !== '' && this.output !== '') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:inputColor}),
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:outputColor} )
+                ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: inputColor }),
+                ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: outputColor })
             ];
         }
-        else if (this.input!=='') {
+        else if (this.input !== '') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x:0, y:0 }, bgColor:inputColor}),
+                ImageWidget.a({ src: gameImages[this.input], hints: { w: 0.5, h: 0.75, x: 0, y: 0 }, bgColor: inputColor }),
             ];
         }
-        else if (this.output!=='') {
+        else if (this.output !== '') {
             this.children = [
-                new ImageWidget({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right:1, bottom:1 }, bgColor:outputColor} )
+                ImageWidget.a({ src: gameImages[this.output], hints: { w: 0.5, h: 0.75, right: 1, bottom: 1 }, bgColor: outputColor })
             ];
         } else {
             this.children = [];
@@ -1435,36 +1423,31 @@ class NetworkTileOverlay extends Widget {
 }
 
 class TileInfoPane extends Widget {
-    /**
-     * 
-     * @param {Board} board 
-     * @param {import('../eskv/lib/modules/types.js').WidgetSizeHints} hints 
-     */
-    constructor(board, hints) {
+    constructor() {
         super();
-        this.board = board;
-        this.hints = hints;
+        /**@type {Board|null} */
+        this.board = null;
         /**@type {Tile|null} */
         this.tile = null;
-        this.tileImage = new ImageWidget({ hints: { x: 0, y: '0.0', h: '1.0', w: '1.0' } }), //Tile & name
-        this.terrainLabel = new Label({ align: 'left', hints: { x: 0, y: '1.0', h: '0.5', w: 1 } }), //Terrain
-        this.terrainBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '1.5', w: 1.0, h: '1.5' } }),
-        this.resourceInLabel = new Label({ align: 'left', text: 'Inputs', hints: { x: 0, y: '3.0', w: 1.0, h: '0.5' } }),
-        this.resourceInBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '3.5', w: 1.0, h: '1.5' } }),
-        this.resourceOutLabel = new Label({ align: 'left', text: 'Outputs', hints: { x: 0, y: '5.0', w: 1.0, h: '0.5' } }),
-        this.resourceOutBox = new BoxLayout({ orientation: 'horizontal', hints: { x: 0, y: '5.5', w: 1.0, h: '1.5' } }),
-        this.tileDescription = new Label({align:'left', fontSize: '0.25', wrap:true, hints:{x:0, y:'7', h:null, w:'5'}}),
-        this.children = [
-            // this.tileLabel,
-            this.tileImage,
-            this.terrainLabel,
-            this.terrainBox,
-            this.resourceInLabel,
-            this.resourceInBox,
-            this.resourceOutLabel,
-            this.resourceOutBox,
-            this.tileDescription,
-        ];
+        this.tileImage = ImageWidget.a({ hints: { x: 0, y: '0.0', h: '1.0', w: '1.0' } }), //Tile & name
+            this.terrainLabel = Label.a({ align: 'left', hints: { x: 0, y: '1.0', h: '0.75', w: 1 } }), //Terrain
+            this.terrainBox = BoxLayout.a({ orientation: 'horizontal', hints: { x: 0, y: '1.75', w: 1.0, h: '1.5' } }),
+            this.resourceInLabel = Label.a({ align: 'left', text: 'Inputs', hints: { x: 0, y: '3.25', w: 1.0, h: '0.75' } }),
+            this.resourceInBox = BoxLayout.a({ orientation: 'horizontal', hints: { x: 0, y: '4.0', w: 1.0, h: '1.5' } }),
+            this.resourceOutLabel = Label.a({ align: 'left', text: 'Outputs', hints: { x: 0, y: '5.5', w: 1.0, h: '0.75' } }),
+            this.resourceOutBox = BoxLayout.a({ orientation: 'horizontal', hints: { x: 0, y: '6.25', w: 1.0, h: '1.5' } }),
+            this.tileDescription = Label.a({ align: 'left', fontSize: '0.325', wrap: true, hints: { x: 0, y: '7.75', h: null, w: '10' } }),
+            this.children = [
+                // this.tileLabel,
+                this.tileImage,
+                this.terrainLabel,
+                this.terrainBox,
+                this.resourceInLabel,
+                this.resourceInBox,
+                this.resourceOutLabel,
+                this.resourceOutBox,
+                this.tileDescription,
+            ];
         this.updateProperties({});
     }
     /**
@@ -1492,14 +1475,14 @@ class TileInfoPane extends Widget {
         // this.tileLabel.text = tileNames[this.tile.code];
         this.tileImage.src = gameImages[this.tile.code];
         this.tileDescription.text = tileDescriptions[this.tile.code];
-        const terrain = this.board.terrainMap.atPos(...this.tile.hexPos);
+        const terrain = this.board?.terrainMap.atPos(...this.tile.hexPos);
         if (terrain !== undefined) {
             this.terrainLabel.text = terrainNames[terrain.code];
-            const tbox = new BoxLayout({
+            const tbox = BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[terrain.code] }),
-                    new Label({ text: `${this.tile.terrainPlacement[terrain.code]}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[terrain.code] }),
+                    Label.a({ text: `${this.tile.terrainPlacement[terrain.code]}`, hints: { h: 0.5 } })
                 ],
             });
             this.terrainBox.children = [tbox];
@@ -1508,11 +1491,11 @@ class TileInfoPane extends Widget {
             //Input resource status
             const needs = this.tile.needs;
             const needsFilled = this.tile.needsFilled;
-            const riBoxChildren = [...needs.keys()].map((resourceType) => new BoxLayout({
+            const riBoxChildren = [...needs.keys()].map((resourceType) => BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${needsFilled.get(resourceType)?.length??0}/${needs.get(resourceType)}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[resourceType] }),
+                    Label.a({ text: `${needsFilled.get(resourceType)?.length ?? 0}/${needs.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceInBox.children = riBoxChildren;
@@ -1521,11 +1504,11 @@ class TileInfoPane extends Widget {
             //Output resource status
             const prodCapacity = this.tile.productionCapacity;
             const prodRequested = this.tile.productionFilled;
-            const roBoxChildren = [...prodCapacity.keys()].map((resourceType) => new BoxLayout({
+            const roBoxChildren = [...prodCapacity.keys()].map((resourceType) => BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${prodRequested.get(resourceType)?.length??0}/${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[resourceType] }),
+                    Label.a({ text: `${prodRequested.get(resourceType)?.length ?? 0}/${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceOutBox.children = roBoxChildren;
@@ -1533,11 +1516,11 @@ class TileInfoPane extends Widget {
         } else {
             this.terrainLabel.text = 'Terrain placement and output bonus';
             const tp = this.tile.terrainPlacement;
-            const tboxChildren = Object.keys(tp).filter(terrainType => tp[terrainType] !== null).map((terrainType) => new BoxLayout({
+            const tboxChildren = Object.keys(tp).filter(terrainType => tp[terrainType] !== null).map((terrainType) => BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[terrainType] }),
-                    new Label({ text: `${tp[terrainType]}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[terrainType] }),
+                    Label.a({ text: `${tp[terrainType]}`, hints: { h: 0.5 } })
                 ]
             }));
             this.terrainBox.children = tboxChildren;
@@ -1545,11 +1528,11 @@ class TileInfoPane extends Widget {
 
             //Input resource needed
             const needs = this.tile.needs;
-            const riBoxChildren = [...needs.keys()].map((resourceType) => new BoxLayout({
+            const riBoxChildren = [...needs.keys()].map((resourceType) => BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${needs.get(resourceType)}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[resourceType] }),
+                    Label.a({ text: `${needs.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceInBox.children = riBoxChildren;
@@ -1557,11 +1540,11 @@ class TileInfoPane extends Widget {
 
             //Output resource produced
             const prodCapacity = this.tile.productionCapacity;
-            const roBoxChildren = [...prodCapacity.keys()].map((resourceType) => new BoxLayout({
+            const roBoxChildren = [...prodCapacity.keys()].map((resourceType) => BoxLayout.a({
                 orientation: 'vertical',
                 children: [
-                    new ImageWidget({ src: gameImages[resourceType] }),
-                    new Label({ text: `${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
+                    ImageWidget.a({ src: gameImages[resourceType] }),
+                    Label.a({ text: `${prodCapacity.get(resourceType)}`, hints: { h: 0.5 } })
                 ]
             }));
             this.resourceOutBox.children = roBoxChildren;
@@ -1626,8 +1609,10 @@ class Board extends Widget {
         this.terrainMap = new TerrainMap(level, this.boardSize, this.orientation);
     }
     on_orientation(event, object, value) {
-        for (let t of this.terrainMap.iter()) {
-            t.orientation = value;
+        if (this.terrainMap) {
+            for (let t of this.terrainMap.iter()) {
+                t.orientation = value;
+            }
         }
     }
     /**
@@ -1741,11 +1726,11 @@ class Board extends Widget {
      */
     connectedAdjacentPriority(terr) {
         let neighbors = [...this.neighborIter(terr.hexPos)];
-        neighbors.sort((a,b)=>{
-            if (a.tile===null && b.tile===null) return 0;
-            if (a.tile===null) return 100;
-            if (b.tile===null) return -100;
-            return tilePriority[a.tile.code]-tilePriority[b.tile.code]
+        neighbors.sort((a, b) => {
+            if (a.tile === null && b.tile === null) return 0;
+            if (a.tile === null) return 100;
+            if (b.tile === null) return -100;
+            return tilePriority[a.tile.code] - tilePriority[b.tile.code]
         });
         return neighbors;
     }
@@ -1789,8 +1774,8 @@ class Board extends Widget {
         for (let t of this.neighborIter(hexPos)) {
             if (visited.has(t)) continue;
             yield t;
-            if (range>1) {
-                yield *this.neighborIterInRange(t.hexPos, range-1, visited);
+            if (range > 1) {
+                yield* this.neighborIterInRange(t.hexPos, range - 1, visited);
             }
         }
 
@@ -1840,8 +1825,8 @@ class LabeledIcon extends BoxLayout {
     constructor(text, iconSrc) {
         super();
         this.children = [
-            new Label({ text: text, hints: { w: null } }),
-            new ImageWidget({ src: iconSrc })
+            Label.a({ text: text, hints: { w: null } }),
+            ImageWidget.a({ src: iconSrc })
         ];
         console.log(text, iconSrc);
         this.updateProperties({ orientation: 'horizontal' });
@@ -1872,7 +1857,7 @@ class ActionBar extends BoxLayout {
      */
     on_child_added(e, o, c) {
         if (c instanceof Tile) {
-            c.bind('touch_down', (e, o, v) => {
+            c.listen('touch_down', (e, o, v) => {
                 if (this.active && /**@type {Widget}*/(o).collide(v.rect)) {
                     for (let c of this.children) /**@type {Tile}*/(c).selected = false;
                     if (this.selectedTile === o) {
@@ -1891,7 +1876,7 @@ class ActionBar extends BoxLayout {
     on_selectedTile(e, o, v) {
         for (let c of this.children) /**@type {Tile}*/(c).selected = false;
         if (this.selectedTile !== null) {
-            this.selectedTile.selected = true;            
+            this.selectedTile.selected = true;
         }
     }
     on_active(e, o, v) {
@@ -1921,52 +1906,78 @@ class GameScreen extends Widget {
 
         /**@type {[number, number]} */
         this.selectPos = [0, 0];
-        this.board = new Board({ hints: { right: 1, y: 0, w: '1h', h: 1 } });
+        this.board = Board.a({ hints: { right: 1, y: 0, w: '1h', h: 1 } });
         this.addChild(this.board);
-        this.tileInfoPane = new TileInfoPane(this.board, { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 });
+        this.tileInfoPane = TileInfoPane.a({ board: this.board, hints: { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 } });
         this.addChild(this.tileInfoPane)
-        this.placementLayer = new Widget({ hints: { x: 0, y: 0, w: 1, h: 1 } });
+        this.placementLayer = Widget.a({ hints: { x: 0, y: 0, w: 1, h: 1 } });
         this.addChild(this.placementLayer);
-        this.scoreboard = new BoxLayout({ align: 'right', hints: { right: 0.99, y: 0.01, w: 1, h: 0.05 } });
+        this.scoreboard = BoxLayout.a({ hints: { right: 0.99, y: 0.01, w: 1, h: 0.05 } });
         this.addChild(this.scoreboard);
-        this.statusLabel = new Label({ text: '', color: 'white', align: 'left', hints: { x: 0.01, y: 0.01, w: 1, h: '1.0' } });
+        this.statusLabel = Label.a({ text: '', color: 'white', align: 'left', hints: { x: 0.01, y: 0.01, w: 1, h: '1.0' } });
         this.addChild(this.statusLabel);
-        this.actionBar = new ActionBar({ hints: { x: 0, y: '1.0', w: '0.14wh', h: 0.84 }, bgColor: 'gray', outlineColor: 'white' });
+        this.actionBar = ActionBar.a({ hints: { x: 0, y: '1.0', w: '0.14wh', h: 0.84 }, bgColor: 'gray', outlineColor: 'white' });
         this.addChild(this.actionBar);
-        this.actionBar.bind('selectedTile', (e, o, v) => this.selectTile(e, o, v));
-        this.nextButton = new Button({
-            text: 'End turn', alight: 'right',
+        this.actionBar.listen('selectedTile', (e, o, v) => this.selectTile(e, o, v, null));
+        this.nextButton = Button.a({
+            text: 'End turn',
             hints: { right: 0.99, bottom: 0.99, w: 0.1, h: 0.05 },
             on_press: (e, o, v) => this.finishTurn()
         });
+        this.instrButton = Button.a({
+            text: 'Instructions',
+            hints: { x: 0.01, bottom: 0.99, w: null, h: 0.05 },
+            on_press: (e, o, v) => {
+                ModalView.a({hints: {x:0.2, y:0.2, w:0.6, h:0.6}, bgColor:'rgba(75, 152, 203, 0.8)'})
+                    .c(Label.a({text: `Welcome to the Island Chains Prototype
+                    
+Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered in input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 2 workers, 2 food (if placed on a plain), and 1 or more ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
+
+Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other nearby castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override the allocations building in a future update.
+
+Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an circled place on the map to place it. The +X indicator gives you a production boost if the building is placed in that spot.
+
+Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
+
+Military: Between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will continue to spread out and destroy nearby buildings. 
+
+End game: The game will end at the conclusion of your 10th round. In this prototype, you score points by activating as many castles as you can, with each active castle producing power points at the end of the round. 
+                    `,
+                    wrap: true,
+                    align: 'left'
+                    })).popup();
+            }
+        });
         this.addChild(this.nextButton);
-        this.updateProperties({});
+        this.addChild(this.instrButton);
     }
     /**
      * 
      * @param {'horizontal'|'vertical'} orienation 
      */
     setLayoutForOrientation(orienation) {
-        if (orienation==='horizontal') {
+        if (orienation === 'horizontal') {
             this.board.hints = { right: 1, y: 0, w: '1h', h: 1 };
             this.board.orientation = 'horizontal';
             this.tileInfoPane.hints = { x: '0.14wh', y: '1.0', w: '0.5h', h: 1 };
             this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
             this.scoreboard.hints = { right: 0.99, y: 0.01, w: 1, h: '1.0' };
             this.statusLabel.hints = { x: 0.01, y: 0.01, w: 1, h: '1.0' };
-            this.actionBar.hints = {x: 0, y: '1.0', w: '0.14wh', h: 0.84 };
-            this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: '1.0' };
+            this.actionBar.hints = { x: 0, y: '1.0', w: '0.14wh', h: 0.84 };
             this.actionBar.orientation = 'vertical';
-        } else if (orienation==='vertical') {
+            this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: '1.0' };
+            this.instrButton.hints = { x: 0.01, bottom: 0.99, w: 0.15, h: '1.0' };
+        } else if (orienation === 'vertical') {
             this.board.hints = { center_x: 0.5, y: '2.0', w: 1, h: '1w' };
             this.board.orientation = 'vertical';
             this.tileInfoPane.hints = { x: 0, y: '1w', w: 1, h: 1 };
             this.placementLayer.hints = { x: 0, y: 0, w: 1, h: 1 };
             this.scoreboard.hints = { right: 0.99, y: 0.0, w: 1, h: '1.0' };
             this.statusLabel.hints = { x: 0.01, y: '1.0', w: 1, h: '1.0' };
-            this.actionBar.hints = {x: 0, bottom: 1, w: 1, h: '2.0' };
+            this.actionBar.hints = { x: 0, bottom: 1, w: 1, h: '2.0' };
             this.actionBar.orientation = 'horizontal';
             this.nextButton.hints = { right: 0.99, y: '1.0', w: 0.1, h: '1.0' };
+            this.instrButton.hints = { right: 0.99, y: '2.2', w: 0.15, h: '1.0' };
         }
     }
     finishTurn() {
@@ -2008,8 +2019,8 @@ class GameScreen extends Widget {
     removeTileFromTerrain(player, terr) {
         const tile = terr.tile;
         terr.tile = null;
-        for(let p of this.players) {
-            p.placedTiles = p.placedTiles.filter(t0=>t0!==tile);
+        for (let p of this.players) {
+            p.placedTiles = p.placedTiles.filter(t0 => t0 !== tile);
         }
     }
     /**
@@ -2055,7 +2066,10 @@ class GameScreen extends Widget {
             this.clearPlacementTargets();
             // this.nextPlayer();
         }
-        if (player.scoreMarker.tilesPlacedThisTurn >= 5) this.actionBar.active = false;
+        if (player.scoreMarker.tilesPlacedThisTurn >= 5) {
+            this.actionBar.active = false;
+            this.statusLabel.text = 'End Turn'
+        }
         return true;
     }
 
@@ -2087,7 +2101,7 @@ class GameScreen extends Widget {
             return true;
         }
         const tile = this.actionBar.selectedTile;
-        const tileToPlace = new playerTileClasses[tile.code]();
+        const tileToPlace = playerTileClasses[tile.code].a({});
         if (!this.canReach(player, terrain)) return true;
         this.actionBar.selectedTile = null;
         return this.placeTile(player, terrain, tileToPlace, terrain.tile instanceof Rubble);
@@ -2171,7 +2185,7 @@ class GameScreen extends Widget {
         // /**@type {ProductionChain} */
         // let totalProd = ProductionChain.from({});
         const placedTiles = [...player.placedTiles, ...enemy.placedTiles];
-        placedTiles.sort((a,b)=>tilePriority[a.code]-tilePriority[b.code]);
+        placedTiles.sort((a, b) => tilePriority[a.code] - tilePriority[b.code]);
         const reversePlacedTiles = [...placedTiles];
         reversePlacedTiles.reverse();
         for (let tile of placedTiles) {
@@ -2188,7 +2202,7 @@ class GameScreen extends Widget {
         }
         let loops = 0;
         console.log('==============Starting resource production allocation==============');
-        while (changes && loops<10) {
+        while (changes && loops < 10) {
             ++loops;
             console.log('--------------Loop', loops, '-----------------------------------------------');
             changes = false;
@@ -2200,18 +2214,18 @@ class GameScreen extends Widget {
                 if (terr0 === undefined) continue;
                 for (let terr of this.board.connectedIter(terr0, player, new Set(), new Set())) {
                     const adjTile = terr.tile;
-                    if (adjTile===null) continue;
+                    if (adjTile === null) continue;
                     const conn = /**@type {Set<Tile>}*/(deactivatedUsers.get(tile));
                     if (conn.has(adjTile) && !tile.needsFilled.meets(tile.needs)) continue; //Ignored deactivated connections
                     for (let need of adjTile.needs.keys()) {
                         const neededAmt = adjTile.needs.get(need);
-                        const neededAmtFilled = adjTile.needsFilled.get(need)??[];
-                        if (neededAmt===undefined) continue;
-                        if (neededAmt===0 && neededAmtFilled.length >= 1 || neededAmt>0 && neededAmtFilled.length >= neededAmt) continue;
+                        const neededAmtFilled = adjTile.needsFilled.get(need) ?? [];
+                        if (neededAmt === undefined) continue;
+                        if (neededAmt === 0 && neededAmtFilled.length >= 1 || neededAmt > 0 && neededAmtFilled.length >= neededAmt) continue;
                         if (!tile.productionCapacity.has(need)) continue;
                         const providedAmt = tile.productionCapacity.get(need);
                         if (providedAmt === undefined) continue;
-                        if ((tile.productionFilled.get(need)??[]).length >= providedAmt) continue;
+                        if ((tile.productionFilled.get(need) ?? []).length >= providedAmt) continue;
                         tile.productionFilled.addConnection(need, adjTile);
                         adjTile.needsFilled.addConnection(need, tile);
                         changes = true;
@@ -2224,7 +2238,7 @@ class GameScreen extends Widget {
             // whose producer does not have the resource it needs to activate
             for (let tile of reversePlacedTiles) {
                 for (let need of tile.needsFilled.keys()) {
-                    const suppliers = tile.needsFilled.get(need)??[];
+                    const suppliers = tile.needsFilled.get(need) ?? [];
                     const activeSuppliers = suppliers.filter((sTile) => sTile.needsFilled.meets(sTile.needs));
                     const inactiveSuppliers = suppliers.filter((sTile) => !sTile.needsFilled.meets(sTile.needs));
                     if (inactiveSuppliers.length > 0) {
@@ -2245,7 +2259,7 @@ class GameScreen extends Widget {
                         //Some of these may come back on the next iteration except for the deactivateConnections
                         for (let n of tile.needsFilled.keys()) {
                             const nfts = tile.needsFilled.get(n);
-                            if (nfts===undefined) continue;
+                            if (nfts === undefined) continue;
                             for (let nft of nfts) {
                                 if (nft.productionFilled.removeConnection(n, tile)) {
                                     console.log('unlinked', nft, ...nft.hexPos, '->', tile, ...tile.hexPos, n);
@@ -2256,7 +2270,7 @@ class GameScreen extends Widget {
                         //Some of these may come back on the next iteration except for the deactivateUsers
                         for (let n of tile.productionFilled.keys()) {
                             const users = tile.productionFilled.get(n);
-                            if (users!==undefined) {
+                            if (users !== undefined) {
                                 for (let p of users) {
                                     if (p.needsFilled.removeConnection(n, tile)) {
                                         console.log('unlinked', tile, ...tile.hexPos, '->', p, ...p.hexPos, n);
@@ -2264,16 +2278,16 @@ class GameScreen extends Widget {
                                 }
                             }
                         }
-                        if (tile.productionFilled.size>0) {
+                        if (tile.productionFilled.size > 0) {
                             tile.productionFilled.clear();
                         }
                         changes = true;
                     }
-                    break; 
+                    break;
                 }
-            }    
+            }
         }
-        if (loops>=1000) {
+        if (loops >= 1000) {
             console.log('Exceeded loop limit during resource produciton allocation');
         }
 
@@ -2293,7 +2307,7 @@ class GameScreen extends Widget {
                     this.actionBar.selectedTile = null;
                 }
             }
-            return true;    
+            return true;
         }
         return false;
     }
@@ -2311,7 +2325,7 @@ class GameScreen extends Widget {
             return;
         }
         const tile = terrain.tile;
-        if (tile===null) {
+        if (tile === null) {
             for (let t of player.placedTiles) {
                 t.showResourceStatus = true;
             }
@@ -2341,23 +2355,25 @@ class GameScreen extends Widget {
                             output = n;
                             break;
                         }
-                    }    
+                    }
                 } else {
                     for (let n of tile.needsFilled.keys()) {
-                        if ((tile.needsFilled.get(n)??[]).length<(tile.needs.get(n)??0)) {
+                        if ((tile.needsFilled.get(n) ?? []).length < (tile.needs.get(n) ?? 0)) {
                             input = n;
                             break;
                         }
                     }
                     for (let n of tile.productionFilled.keys()) {
-                        if ((tile.productionFilled.get(n)??[]).length<(tile.productionCapacity.get(n)??0)) {
+                        if ((tile.productionFilled.get(n) ?? []).length < (tile.productionCapacity.get(n) ?? 0)) {
                             output = n;
                             break;
                         }
-                    }    
+                    }
                 }
             }
-            info.push(new NetworkTileOverlay(this.board.hexSide, terr.hexPos, input, output, terr===terrain));
+            const nto = NetworkTileOverlay.a({w:this.board.hexSide, h:this.board.hexSide, hexPos:terr.hexPos, input, output, primary:terr === terrain})
+            nto.updateIO();
+            info.push(nto);
         }
         this.placementLayer.children = info;
     }
@@ -2365,7 +2381,7 @@ class GameScreen extends Widget {
     /**
      * @param {TileType} tileType */
     setPlacementTargets(tileType) {
-        const tile = new playerTileClasses[tileType]();
+        const tile = playerTileClasses[tileType].a({});
         this.clearPlacementTargets();
         let player = this.players[this.activePlayer];
         if (!this.board.terrainMap) return;
@@ -2374,11 +2390,11 @@ class GameScreen extends Widget {
             if (thex.tile !== null && !(thex.tile instanceof Rubble)) continue;
             if (tile.terrainPlacement[thex.code] === null) continue;
             let value = tile.terrainPlacement[thex.code];
-            let tt = new TargetTile({
+            let tt = TargetTile.a({
                 w: this.board.hexSide * 2,
                 h: this.board.hexSide * 2,
                 score: value,
-                hexPos: thex.hexPos.slice(),
+                hexPos: [thex.hexPos[0],thex.hexPos[1]],
             });
             let xy = this.board.pixelPos(thex.hexPos)
             tt.center_x = xy[0];
@@ -2419,9 +2435,9 @@ class GameScreen extends Widget {
         let ep = this.players[1];
         if (!p || !ep) return; //throw new Error("No active player found");
 
-        this.tileStack = [...this.level.tileSet].map(t => new playerTileClasses[t]());
+        this.tileStack = [...this.level.tileSet].map(t => playerTileClasses[t].a({}));
         this.tileStack.sort(() => Math.random() - 0.5);
-        let startTile = new playerTileClasses[this.level.startTile]();
+        let startTile = playerTileClasses[this.level.startTile].a();
         let start = new Vec2(this.level.start);
 
         let startTerr = this.board.terrainMap.atPos(start[0], start[1]);
@@ -2433,27 +2449,27 @@ class GameScreen extends Widget {
         for (let terr of this.board.terrainMap.iter()) {
             if (terr instanceof Water) continue;
             const dist = new Vec2(terr.hexPos).sub(new Vec2(startTerr.hexPos)).abs().sum();
-            if (dist===furthest) {
+            if (dist === furthest) {
                 enemyCandidates.push(terr);
-            } else if (dist>furthest) {
+            } else if (dist > furthest) {
                 enemyCandidates = [terr];
                 furthest = dist;
             }
         }
 
-        if (enemyCandidates.length>0) {
+        if (enemyCandidates.length > 0) {
             const enemyStartTerr = rand.choose(enemyCandidates);
-            let enemyStartTile = new EnemyCastle();
+            let enemyStartTile = EnemyCastle.a({});
             this.placeTile(ep, enemyStartTerr, enemyStartTile, true, false, false);
         }
 
-        this.actionBar.addChild(new Farm());
-        this.actionBar.addChild(new Village());
-        this.actionBar.addChild(new Mine());
-        this.actionBar.addChild(new Abbey());
-        this.actionBar.addChild(new Tradeship());
-        this.actionBar.addChild(new Stronghold());
-        this.actionBar.addChild(new Castle());
+        this.actionBar.addChild(Farm.a({}));
+        this.actionBar.addChild(Village.a({}));
+        this.actionBar.addChild(Mine.a({}));
+        this.actionBar.addChild(Abbey.a({}));
+        this.actionBar.addChild(Tradeship.a({}));
+        this.actionBar.addChild(Stronghold.a({}));
+        this.actionBar.addChild(Castle.a({}));
     }
 
     /**
@@ -2470,10 +2486,10 @@ class GameScreen extends Widget {
 
         for (let p of playerSpec) {
             if (p.type === 0) { // human
-                this.players.push(new Player(p.name, p.color, this, true));
+                this.players.push(Player.a({name: p.name, color: p.color, screen:this, showScore: true}));
             }
             if (p.type === 1) { // enemy
-                this.players.push(new EnemyPlayer(p.name, p.color, this, false));
+                this.players.push(EnemyPlayer.a({name: p.name, color: p.color, screen: this, showScore: false}));
             }
         }
         this.setupLevel(level);
@@ -2500,7 +2516,7 @@ class GameScreen extends Widget {
                             if (etile instanceof EnemyDragon || etile instanceof EnemyStronghold || etile instanceof EnemyTent || etile instanceof EnemyCastle || etile instanceof EnemyLongboat) {
                                 etile.health--;
                                 if (etile.health <= 0) {
-                                    const rubble = new Rubble();
+                                    const rubble = Rubble.a({});
                                     this.placeTile(enemyPlayer, eterr, rubble, true, false);
                                     player.scoreMarker.score += 1;
                                 }
@@ -2598,8 +2614,8 @@ class GameScreen extends Widget {
         for (let tt of /**@type {TargetTile[]}*/(this.placementLayer.children)) {
             let hp = this.board.pixelPos(tt.hexPos);
             tt.w = hexSide,
-            tt.h = hexSide,
-            tt.center_x = hp[0];
+                tt.h = hexSide,
+                tt.center_x = hp[0];
             tt.center_y = hp[1];
         }
 
@@ -2618,6 +2634,9 @@ class GameScreen extends Widget {
         this.applyHints(this.nextButton);
         this.nextButton.layoutChildren();
 
+        this.applyHints(this.instrButton);
+        this.instrButton.layoutChildren();
+
         this.applyHints(this.placementLayer);
         this.placementLayer.layoutChildren();
 
@@ -2634,17 +2653,14 @@ class PlayerSpec {
 }
 
 class PlayerScore extends Label {
-    constructor(identity, color) {
-        super();
-        this.ident = identity;
-        this.color = color;
-        this.score = 0.0;
-        this.turn = 10;
-        this.tilesPlacedThisTurn = 0;
-        this.activeTurn = false;
-        /**@type {"left"|"center"|"right"}*/
-        this.align = "right";
-    }
+    ident = '';
+    color = 'white';
+    score = 0.0;
+    turn = 10;
+    tilesPlacedThisTurn = 0;
+    activeTurn = false;
+    /**@type {"left"|"center"|"right"}*/
+    align = "right";
     on_score(event, object, data) {
         this.updateStatus();
     }
@@ -2656,9 +2672,9 @@ class PlayerScore extends Label {
     }
     updateStatus() {
         if (this.turn > 1) {
-            this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Turn: ${11-this.turn}/10 -- Score: ${this.score}`;
+            this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Round: ${11 - this.turn}/10 -- Score: ${this.score}`;
         } else if (this.turn === 1) {
-            this.text = `Tiles to place: ${5 - this.tilesPlacedThisTurn} -- Last turn -- Score: ${this.score}`;
+            this.text = `Buildings to place: ${5 - this.tilesPlacedThisTurn} -- Last round -- Score: ${this.score}`;
         } else {
             this.text = `Game over -- Score: ${this.score}`;
         }
@@ -2666,30 +2682,24 @@ class PlayerScore extends Label {
 }
 
 class Player extends EventSink {
-    /**
-     * 
-     * @param {string} name 
-     * @param {string} color 
-     * @param {GameScreen} screen
-     * @param {boolean} showScore
-     */
-    constructor(name, color, screen, showScore) {
+    name = '';
+    color = 'white';
+    /**@type {GameScreen|null} */
+    screen = null;
+    showScore = true;
+    constructor() {
         super();
         this.localControl = true;
-        this.name = name;
-        this.color = color;
-        this.screen = screen;
         /**@type {Tile[]} */
         this.placedTiles = [];
-        this.scoreMarker = new PlayerScore(this.name.substring(0, 2), color);
-        this.showScore = showScore;
+        this.scoreMarker = PlayerScore.a({ident:this.name.substring(0, 2), color:this.color});
     }
 
     on_showScore(event, object, value) {
         if (this.showScore) {
-            this.screen.scoreboard.addChild(this.scoreMarker);
+            this.screen?.scoreboard.addChild(this.scoreMarker);
         } else {
-            this.screen.scoreboard.removeChild(this.scoreMarker);
+            this.screen?.scoreboard.removeChild(this.scoreMarker);
         }
     }
 
@@ -2758,7 +2768,7 @@ class EnemyPlayer extends Player {
             if (t instanceof EnemyStronghold) {
                 for (let terr of board.neighborIter(t.hexPos)) {
                     if (terr.tile instanceof Tile && !(terr.tile instanceof Rubble) && !this.placedTiles.includes(terr.tile)) {
-                        screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
+                        screen.placeTile(otherPlayer, terr, Rubble.a({}), true, false);
                         break;
                     }
                 }
@@ -2766,7 +2776,7 @@ class EnemyPlayer extends Player {
             else if (t instanceof EnemyDragon) {
                 for (let terr of board.neighborIter(t.hexPos)) {
                     if (terr.tile instanceof Tile && !(terr.tile instanceof Rubble) && !this.placedTiles.includes(terr.tile)) {
-                        screen.placeTile(otherPlayer, terr, new Rubble(), true, false);
+                        screen.placeTile(otherPlayer, terr, Rubble.a({}), true, false);
                         break;
                     }
                 }
@@ -2779,19 +2789,19 @@ class EnemyPlayer extends Player {
          */
         function nearestTiles(p, op) {
             let nearest = Infinity;
-            let nearTiles = /**@type {[Tile, Tile][]}*/([]); 
+            let nearTiles = /**@type {[Tile, Tile][]}*/([]);
             for (let t of p.placedTiles) {
                 for (let o of op.placedTiles) {
                     const dist = new Vec2(t.hexPos).sub(o.hexPos).abs().sum();
                     if (dist < nearest) {
-                        nearTiles = [[t,o]];
+                        nearTiles = [[t, o]];
                         nearest = dist;
                     } else if (dist === nearest) {
-                        nearTiles.push([t,o]);
+                        nearTiles.push([t, o]);
                     }
                 }
             }
-            return {nearest, nearTiles};
+            return { nearest, nearTiles };
         }
         /**
          * 
@@ -2800,14 +2810,14 @@ class EnemyPlayer extends Player {
          * @param {Player} op
          * @param {boolean} excludeWater
          */
-        function nearestEmptyTerrain(board, tile, op, excludeWater=false) {
+        function nearestEmptyTerrain(board, tile, op, excludeWater = false) {
             let nearest = Infinity;
-            let nearTerrain = /**@type {Set<TerrainHex>}*/(new Set()); 
+            let nearTerrain = /**@type {Set<TerrainHex>}*/(new Set());
             for (let terr of tile.iterNetwork(board)) {
-                if (excludeWater && terr instanceof Water) continue; 
+                if (excludeWater && terr instanceof Water) continue;
                 if (terr.tile !== null) continue;
                 for (const ot of op.placedTiles) {
-                    const dist = new Vec2(terr.hexPos).sub(ot.hexPos).abs().sum(); 
+                    const dist = new Vec2(terr.hexPos).sub(ot.hexPos).abs().sum();
                     if (dist < nearest) {
                         nearTerrain.clear();
                         nearTerrain.add(terr)
@@ -2817,9 +2827,9 @@ class EnemyPlayer extends Player {
                     }
                 }
             }
-            return {nearest, nearTerrain};
+            return { nearest, nearTerrain };
         }
-        if (this.placedTiles.filter((t)=>!(t instanceof Rubble)).length<this.maxTiles) {
+        if (this.placedTiles.filter((t) => !(t instanceof Rubble)).length < this.maxTiles) {
             const ntData = nearestTiles(this, otherPlayer);
             const nearest = ntData.nearest;
             const nearTiles = ntData.nearTiles;
@@ -2828,33 +2838,33 @@ class EnemyPlayer extends Player {
                 const nltData = nearestEmptyTerrain(board, t, otherPlayer)
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
-                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyLongboat.a({}), true, false, false);
                 } else if (newTerr) {
-                    screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyTent.a({}), true, false, false);
                 }
             } else if (t instanceof EnemyStronghold) {
                 const nltData = nearestEmptyTerrain(board, t, otherPlayer)
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
-                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyLongboat.a({}), true, false, false);
                 } else if (newTerr) {
-                    screen.placeTile(this, newTerr, new EnemyTent(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyTent.a({}), true, false, false);
                 }
             } else if (t instanceof EnemyLongboat) {
                 const nltData = nearestEmptyTerrain(board, t, otherPlayer);
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
-                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyLongboat.a({}), true, false, false);
                 } else if (newTerr) {
-                    screen.placeTile(this, newTerr, new EnemyStronghold(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyStronghold.a({}), true, false, false);
                 }
             } else if (t instanceof EnemyTent) {
                 const nltData = nearestEmptyTerrain(board, t, otherPlayer);
                 const newTerr = rand.choose([...nltData.nearTerrain]);
                 if (newTerr instanceof Water) {
-                    screen.placeTile(this, newTerr, new EnemyLongboat(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyLongboat.a({}), true, false, false);
                 } else if (newTerr) {
-                    screen.placeTile(this, newTerr, new EnemyStronghold(), true, false, false);
+                    screen.placeTile(this, newTerr, EnemyStronghold.a({}), true, false, false);
                 }
             }
         }
@@ -2924,18 +2934,16 @@ const playerColorLookup = {
 // }
 
 class GameMenu extends BoxLayout {
-    /**
-     * 
-     * @param {import('../eskv/lib/modules/widgets.js').BoxLayoutProperties} props 
-     */
-    constructor(props) {
-        super(props);
-        this.playerCount = 0;
-        this.players = [];
-        this.wGame = new GameScreen();
+    playerCount = 0;
+    /**@type {Player[]} */
+    players = [];
+    wGame = GameScreen.a({});
+    level = levels[0];
+    /**@type {PlayerSpec[]} */
+    playerSpec = [];
+    constructor() {
+        super();
         this.addChild(this.wGame);
-        this.level = levels[0]
-        this.playerSpec = [];
         this.startSpGame(this.level);
     }
 
@@ -2976,7 +2984,7 @@ class PuzzleKingdomApp extends App {
         this.prefDimH = 20;
         this.prefDimW = 20;
         this._baseWidget.children = [
-            new GameMenu({ hints: { x: 0, y: 0, w: 1, h: 1 } })
+            GameMenu.a({ hints: { x: 0, y: 0, w: 1, h: 1 } })
         ];
     }
 
