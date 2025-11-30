@@ -1,6 +1,6 @@
 //@ts-check
 
-import { App, Widget, ImageWidget, WidgetAnimation, Label, BoxLayout, Vec2, math, rand, Button, EventSink, vec2, ModalView } from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
+import { App, Widget, ImageWidget, WidgetAnimation, Label, ScrollView, BoxLayout, Vec2, math, rand, Button, EventSink, vec2, ModalView } from '../eskv/lib/eskv.js'; //Import ESKV objects into an eskv namespace
 import { colorString } from '../eskv/lib/modules/math.js';
 import { Touch } from '../eskv/lib/modules/input.js';
 
@@ -131,8 +131,9 @@ const gameImages = {
 
 /**@typedef {'p'|'f'|'m'|'w'} TerrainType */
 /**@typedef {'rf'|'rw'|'rm'|'rs'|'rt'|'ro'|'rb'|'ri'} ResourceType */
-/**@typedef {'C'|'V'|'A'|'F'|'M'|'S'|'T'|'X'} TileType */
+/**@typedef {'C'|'V'|'A'|'F'|'M'|'S'|'T'|'X'} FriendlyTileType */
 /**@typedef {'ET'|'ES'|'EC'|'ED'|'EL'} EnemyTileType */
+/**@typedef {FriendlyTileType|EnemyTileType} TileType */
 /**@typedef {{[id in ResourceType]?:number}} ProductionQuantityObj */
 /**@typedef {ProductionQuantity|ProductionQuantityObj} ProductionQuantityLike */
 /**@typedef {{[id in ResourceType]?:Tile[]}} ProductionChainObj */
@@ -165,19 +166,19 @@ const tileNames = {
 }
 
 const tileDescriptions = {
-    C: 'A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each turn.',
+    C: 'A castle produces influence once supplied with workers, food, and blessings. Every structure adjacent to a castle has a production link to all of the other adjacent structures. Once placed, castles connect their production links to the links of any other castles in range 3. In this prototype, each castle producing influence scores you 1 point at the end of each round.',
     V: 'A village produces workers once provided with food.',
     A: 'An abbey produces blessings once supplied with food and workers. Blessings make other structures more effective producers.',
     F: 'A farm produces food once supplied with workers.',
     M: 'A mine produces ore once supplied with workers.',
-    S: 'A stronghold produces military strength once supplied with workers and ore. At the end of each turn, units from activated strongholds will attack enemies that they can reach.',
+    S: 'A stronghold produces military strength once supplied with workers and ore. At the end of each round, units from activated strongholds will attack enemies that they can reach.',
     T: 'A tradeship produces money once supplied with workers. Tradeships extend the accessible terrain of your empire to all terrain accessible from water in range 3 of the tradeship. Once placed, tradeships allow production links between all structures within reach of the Tradeship.',
     X: 'Rubble is the remains of a structure or enemy that you can build over.',
     ET: 'An enemy tent is a temporary installation that expands enemy reach but does not attack.',
-    ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each turn.',
+    ES: 'An enemy stronghold expands the enemies reach and will attack adjacent structures at the end of each round.',
     EC: 'The enemy castle.',
     EL: 'The enemy longboat allows enemy units to travel over water.',
-    ED: 'An enemy dragon lives in mountains and will attack structures in range 2 at the end of each turn.',
+    ED: 'An enemy dragon lives in mountains and will attack structures in range 2 at the end of each round.',
 }
 
 /**@type {{[id in ResourceType]:string}} */
@@ -783,7 +784,8 @@ function blessed(board, hexPos) {
 }
 
 class Rubble extends Tile {
-    code = /**@type {TileType} */('X');
+    /**@type {TileType} */
+    code = 'X';
     name = 'Rubble';
     terrainPlacement = { 'p': 0, 'f': 0, 'm': 0, 'w': null };
     tileColor = 'gray';
@@ -796,7 +798,8 @@ class Rubble extends Tile {
 }
 
 class Castle extends Tile {
-    code = /**@type {TileType} */('C');
+    /**@type {TileType} */
+    code = 'C';
     name = 'Castle';
     terrainPlacement = { 'p': 0, 'f': 0, 'm': 0, 'w': null };
     tileColor = 'purple';
@@ -848,7 +851,8 @@ class Castle extends Tile {
 }
 
 class Village extends Tile {
-    code = /**@type {TileType}*/('V');
+    /**@type {TileType} */
+    code = 'V';
     name = 'Village';
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 0, 'w': null };
     tileColor = 'yellow';
@@ -868,7 +872,8 @@ class Village extends Tile {
 }
 
 class Stronghold extends Tile {
-    code = /**@type {TileType}*/('S');
+    /**@type {TileType}*/
+    code = 'S';
     name = 'Stronghold';
     terrainPlacement = { 'p': 1, 'f': 0, 'm': 1, 'w': null };
     tileColor = 'red';
@@ -888,7 +893,8 @@ class Stronghold extends Tile {
 }
 
 class Mine extends Tile {
-    code = /**@type {TileType}*/('M');
+    /**@type {TileType}*/
+    code = 'M';
     name = 'Mine';
     terrainPlacement = { 'p': 1, 'f': 0, 'm': 2, 'w': null };
     tileColor = 'grey';
@@ -907,7 +913,8 @@ class Mine extends Tile {
 }
 
 class Tradeship extends Tile {
-    code = /**@type {TileType}*/('T');
+    /**@type {TileType}*/
+    code = 'T';
     name = 'Tradeship';
     terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 0 };
     tileColor = colorString([0.4, 0.2, 0.2, 1.0]);
@@ -957,7 +964,8 @@ class Tradeship extends Tile {
 }
 
 class Abbey extends Tile {
-    code = /**@type {TileType}*/('A');
+    /**@type {TileType}*/
+    code = 'A';
     name = 'Abbey';
     terrainPlacement = { 'p': 0, 'f': 1, 'm': 2, 'w': null };
     tileColor = colorString([0.7, 0.4, 0.4, 1.0]);
@@ -1000,7 +1008,8 @@ class Farm extends Tile {
 }
 
 class EnemyStronghold extends Tile {
-    code = /**@type {TileType}*/('ES');
+    /**@type {TileType}*/
+    code = 'ES';
     name = 'Enemy Stronghold';
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
@@ -1021,7 +1030,8 @@ class EnemyStronghold extends Tile {
 }
 
 class EnemyCastle extends Tile {
-    code = /**@type {TileType}*/('EC');
+    /**@type {TileType}*/
+    code = 'EC';
     name = 'Enemy Castle';
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
@@ -1042,7 +1052,8 @@ class EnemyCastle extends Tile {
 }
 
 class EnemyLongboat extends Tile {
-    code = /**@type {TileType}*/('EL');
+    /**@type {TileType}*/
+    code = 'EL';
     name = 'Enemy Castle';
     terrainPlacement = { 'p': null, 'f': null, 'm': null, 'w': 1 };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
@@ -1101,7 +1112,8 @@ class EnemyLongboat extends Tile {
 }
 
 class EnemyTent extends Tile {
-    code = /**@type {TileType} */('ET');
+    /**@type {TileType} */
+    code = 'ET';
     name = 'Enemy Tent';
     terrainPlacement = { 'p': 1, 'f': 1, 'm': 1, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
@@ -1160,7 +1172,8 @@ class EnemyTent extends Tile {
 }
 
 class EnemyDragon extends Tile {
-    code = /**@type {TileType}*/('ED');
+    /**@type {TileType}*/
+    code = 'ED';
     name = 'Enemy Dragon';
     terrainPlacement = { 'p': null, 'f': null, 'm': 2, 'w': null };
     tileColor = colorString([0.7, 0.2, 0.2, 1.0]);
@@ -1384,6 +1397,176 @@ class TerrainMap extends Array {
      */
     set(x, y, terrain) {
         this[x][y] = terrain;
+    }
+}
+
+class NetworkFlowEdge extends Widget {
+    /**@type {Board|null} */
+    board = null;                       // pass your board instance in props
+    /** @type {[number,number]} */
+    fromHex = [0, 0];
+    /** @type {[number,number]} */
+    toHex = [0, 0];
+    /** @type {ResourceType} */
+    resource = 'rf';
+    primary = false;     // thicker/highlighted if it touches the hovered tile
+    phase = 0;            // dash offset animation
+    speed = 1;           // px/sec for dash flow (kept gentle to avoid strobe)
+    _phaseInit = false;  // internal: has phase been restored from memory?
+    /** @type {Map<string, HTMLImageElement>} */
+    static _iconCache = new Map();
+    
+    // Stable phase memory so edges don't "flash" when the overlay is rebuilt
+    /** @type {Map<string, number>} */
+    static _phaseMem = new Map();
+
+    // Resource colors for your short codes
+    static resColor = {
+        rw: 'rgba(210,165, 70,0.95)', // workers
+        rf: 'rgba(100,185,100,0.95)', // food
+        rt: 'rgba(167,115, 58,0.95)', // timber (adjust if unused)
+        ro: 'rgba(140,140,140,0.95)', // ore
+        rb: 'rgba(140,120,210,0.95)', // blessing
+        rs: 'rgba(210, 60, 60,0.95)', // soldiers
+        rm: 'rgba(200,160,100,0.95)', // money (adjust if unused)
+        ri: 'rgba( 60,140,210,0.95)', // influence
+    };
+
+    /** Unique key for phase memory */
+    _edgeKey() {
+        const [fx, fy] = this.fromHex, [tx, ty] = this.toHex;
+        return `${fx},${fy}->${tx},${ty}:${this.resource}`;
+    }
+
+    /** Pixel center for a hex using your board API */
+    centerOf(hexPos) {
+        if (!this.board || typeof this.board.pixelPos !== 'function') return { x: 0, y: 0 };
+        const [x, y] = this.board.pixelPos(hexPos);
+        return { x, y };
+    }
+
+    /** Gentle bow so overlapping edges are readable */
+    ctrlPoint(a, b) {
+        const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const bow = Math.min((this.board?.hexSide ?? 16) * 0.4, len * 0.12);
+        return { x: mx + nx * bow, y: my + ny * bow };
+    }
+
+    /** Optional half-pixel snap to reduce shimmer on thin strokes
+     * @param {number} v 
+     * @returns 
+     */
+    _snap(v) { return Math.round(v) + 0.5; }
+
+    /**@type {Widget['update']} */
+    update(app, millis) {
+        /** Animate flow; keep phase stable across rebuilds */
+        if (!this._phaseInit) {
+            const key = this._edgeKey();
+            if (NetworkFlowEdge._phaseMem.has(key)) {
+                this.phase = NetworkFlowEdge._phaseMem.get(key) ?? 0;
+            }
+            this._phaseInit = true;
+        }
+
+        // Compute edge length in pixels (or whatever board.pixelPos returns)
+        const a = this.centerOf(this.fromHex);
+        const b = this.centerOf(this.toHex);
+        const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+
+        // Advance phase as a *normalized* parameter 0..1 along the curve
+        const dt = millis / 1000;          // seconds
+        const v  = this.speed / len;       // fraction of curve per second
+        this.phase = (this.phase + v * dt) % 1;
+
+        NetworkFlowEdge._phaseMem.set(this._edgeKey(), this.phase);
+
+        app.requestFrameUpdate();
+        for (const c of this.children) c.update(app, millis);
+    }
+
+    /**@type {Widget['draw']} */
+    draw(app, ctx) {
+        if (!this.board) return;
+
+        // Geometry in screen units
+        const a = this.centerOf(this.fromHex);
+        const b = this.centerOf(this.toHex);
+        const c = this.ctrlPoint(a, b);
+
+        const ax = a.x, ay = a.y;
+        const bx = b.x, by = b.y;
+        const cx = c.x, cy = c.y;
+
+        // Resource icon
+        const src = gameImages[this.resource];
+        if (!src) return;
+
+        let img = NetworkFlowEdge._iconCache.get(src);
+        if (!img) {
+            img = new Image();
+            img.src = src;
+            NetworkFlowEdge._iconCache.set(src, img);
+        }
+        if (!img.complete) {
+            app.requestFrameUpdate();
+            return;
+        }
+
+        const side = this.board.hexSide ?? 1;
+        const size = side * (this.primary ? 0.30 : 0.25);
+
+        // Fraction of curve used (keep pulses away from exact endpoints)
+        const startFrac = 0.12;
+        const endFrac   = 0.88;
+        const span      = endFrac - startFrac;
+
+        // How many pulses
+        let pulses = Math.max(1, Math.round(span * (Math.hypot(bx - ax, by - ay) / (side * 1.4))));
+        if (this.primary && pulses < 2) pulses = 2;
+
+        // Quadratic Bezier evaluator
+        const bezierPoint = (t) => {
+            const u  = 1 - t;
+            const uu = u * u;
+            const tt = t * t;
+            const px = uu * ax + 2 * u * t * cx + tt * bx;
+            const py = uu * ay + 2 * u * t * cy + tt * by;
+            return { px, py };
+        };
+
+        ctx.save();
+        ctx.setLineDash([]);
+
+        for (let i = 0; i < pulses; i++) {
+            // Phase is 0..1 around the curve; offset each pulse evenly in param space
+            const tBase = (this.phase + i / pulses) % 1;
+            const t     = startFrac + tBase * span;   // squeeze into [startFrac,endFrac]
+
+            const { px, py } = bezierPoint(t);
+
+            // Optional fade toward endpoints to make wrap less noticeable
+            const localT   = tBase;                   // 0..1 inside the used band
+            const fadeEdge = Math.sin(Math.PI * localT); // 0 at ends, 1 in middle
+
+            // Soft glow for primary edges
+            if (this.primary && fadeEdge > 0.1) {
+                ctx.globalAlpha = 0.35 * fadeEdge;
+                ctx.beginPath();
+                ctx.arc(px, py, size * 0.7, 0, Math.PI * 2);
+                ctx.fillStyle = NetworkFlowEdge.resColor[this.resource] ?? 'rgba(255,255,255,0.5)';
+                ctx.fill();
+            }
+
+            // Icon pulse
+            ctx.globalAlpha = (this.primary ? 0.95 : 0.80) * (0.3 + 0.7 * fadeEdge);
+            ctx.drawImage(img, px - size / 2, py - size / 2, size, size);
+        }
+
+        ctx.restore();
     }
 }
 
@@ -1891,6 +2074,121 @@ class ActionBar extends BoxLayout {
     }
 }
 
+
+const olgGameDescription = `Welcome to the Island Chains Prototype
+                    
+Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered on input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 2 workers, 2 food (if placed on a plain), and 1 or more ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
+
+Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other nearby castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override the allocations building in a future update.
+
+Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an circled place on the map to place it. The +X indicator gives you a production boost if the building is placed in that spot.
+
+Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
+
+Military: Between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will continue to spread out and destroy nearby buildings. 
+
+End game: The game will end at the conclusion of your 10th round. In this prototype, you score points by activating as many castles as you can, with each active castle producing power points at the end of the round. 
+`
+
+const gameDescription = `Island Chains – Prototype Overview
+==================================================================
+
+Island Chains is a turn-based hex-grid city-builder about managing production chains. The core twist: the game has no resource stockpiles. Instead you activate buildings by connecting them with buildings that provide their inputs. Buildings are active in turns where their required inputs are supplied through the network of connected structures. When active, their outputs will immediately flow to other buildings within range that need them.
+
+You play through 10 rounds, placing up to five buildings per round to expand your island economy and defend against enemies.
+
+Core Loop: Place Buildings → Form Chains → Trigger Production
+==================================================================
+
+Each building has:
+
+- Inputs (resources it needs to activate)
+- Outputs (resources it produces this turn if activated)
+- Terrain bonuses (extra output when built on certain terrain)
+
+For example:
+
+- Village → Workers (needs: Food)
+- Farm → Food (needs: Workers, production bonus: plains or forest)
+- Mine → Ore (needs: Workers, production bonus: mountains)
+
+If you place a Farm next to a Village, they will power each other:
+Workers → Farm → Food → Village → more Workers.
+
+Because resources don’t accumulate, activation depends entirely on whether inputs can be satisfied in that turn based on the current network.
+
+Resource Flow & Routing
+==================================================================
+
+By default, resources only flow between adjacent tiles, creating small local networks. You expand and combine these by placing buildings strategically.
+
+Two special buildings break adjacency rules and form larger shared networks:
+
+Castles — Large-Scale Routing Hubs
+
+- All buildings adjacent to a Castle can share resources with one another.
+- All Castles within range 3 link their adjacency groups into one larger network.
+- A supplied Castle produces Influence, which is your score in the prototype.
+
+Castles act as the backbone of long-distance production chains.
+
+Tradeships — Water Network Routers
+
+- Only placed on water, but create a supply network spanning all water tiles within range 3.
+- Any structures touching those tiles can share resources via the Tradeship.
+- Tradeships serve as flexible “floating supply lines” for connecting distant regions.
+
+Boosts & Modifiers
+==================================================================
+
+Blessings (Abbeys): Abbeys produce Blessings when supplied with Workers and Food. Many buildings get bonus output if Blessings are present, but they can still function without them.
+
+Terrain Bonuses: Some buildings gain extra output when built on favorable terrain. A “+X” indicator appears when placing a tile to show this.
+
+Playing a Round
+==================================================================
+
+1. Pick a building from your available pieces.
+
+2. Click a highlighted hex to place it (placement bonuses are highlighted).
+
+3. The game then:
+
+  - Updates the connectivity network (adjacency, castles, tradeships)
+
+  - Determines which buildings receive the inputs they need
+
+  - Activates every building whose inputs can be supplied this turn
+
+  - Routes resulting outputs to any connected buildings that require them
+
+Repeat until you have played 5 tiles
+
+You can inspect your network at any time. Click any placed building during a round to view:
+
+  - Its inputs and outputs
+
+  - Which requirements are met / unmet
+
+  - How it is connected through adjacency, castle, and tradeship networks
+
+Military & Enemies
+==================================================================
+
+Between rounds, enemy structures appear and expand outward.
+Your Strongholds, when supplied with Workers and Ore, generate Military Strength that automatically attacks nearby enemies.
+
+Unchecked enemies will destroy your buildings, leaving behind Rubble that can later be built over.
+
+End of Game
+==================================================================
+
+After 10 rounds, the game ends.
+In this prototype, scoring is straightforward: Each activated Castle produces Influence points at the end of the round.
+
+Building strong production networks and well-placed Castles is the key to high scores.
+`
+
 class GameScreen extends Widget {
     constructor() {
         super();
@@ -1902,6 +2200,10 @@ class GameScreen extends Widget {
         this.gameOver = false;
         /**@type {Tile[]} */
         this.tileStack = [];
+        /**@type {Tile|null} */
+        this.hoverTile = null;
+        /**@type {[Tile, TerrainHex][]} */
+        this.roundPlacements = [];
         this.bgColor = 'rgba(25, 102, 153, 1.0)'; //'Ocean Blue';
 
         /**@type {[number, number]} */
@@ -1920,34 +2222,33 @@ class GameScreen extends Widget {
         this.addChild(this.actionBar);
         this.actionBar.listen('selectedTile', (e, o, v) => this.selectTile(e, o, v, null));
         this.nextButton = Button.a({
-            text: 'End turn',
+            text: 'End round',
             hints: { right: 0.99, bottom: 0.99, w: 0.1, h: 0.05 },
             on_press: (e, o, v) => this.finishTurn()
+        });
+        this.undoButton = Button.a({
+            text: 'Undo',
+            hints: { right: 0.88, bottom: 0.99, w: 0.1, h: 0.05 },
+            on_press: (e, o, v) => this.undoLastTile(),
         });
         this.instrButton = Button.a({
             text: 'Instructions',
             hints: { x: 0.01, bottom: 0.99, w: null, h: 0.05 },
             on_press: (e, o, v) => {
-                ModalView.a({hints: {x:0.2, y:0.2, w:0.6, h:0.6}, bgColor:'rgba(75, 152, 203, 0.8)'})
-                    .c(Label.a({text: `Welcome to the Island Chains Prototype
-                    
-Overview: Island Chains is a turn based city building game where you manage production chains between buildings. You play the game over 10 rounds and in each round you can place up to 5 buildings (aka tiles) onto the hex squares. Instead of stockpiling resources, the production chaining in the game is centered in input fulfillment to activate buildings. So for example, there are villages, farms, and mines that respectively produce 2 workers, 2 food (if placed on a plain), and 1 or more ore. Most buildings will require workers to activate and some will additionally require ore and food. A village requires food and a farm requires workers so if you place them side by side you will activate both. Place a mine next to them and it will start producing ore. 
-
-Once activated, buildings produce their resource(s), which can then be fed into other buildings. By default, buildings can only share their resources with adjacent tiles, but ships and castles let you break that rule by essentially acting as a resource router between everything they are connected to. Castles are also interconnected with other nearby castles so every building they are routing can share resources with buildings routed to other castles. There are also Strongholds, providing defenses, and Abbeys, providing blessings (aka building productivity boost). The game handles figuring out what resources to rout to what buildings but I'm thinking about allowing players to override the allocations building in a future update.
-
-Playing a round: To play a round you will simply click on a building on the left pane (or bottom of the screen in portrait mode) then click an circled place on the map to place it. The +X indicator gives you a production boost if the building is placed in that spot.
-
-Building and activations: buildings are activated when they have been supplied with their required resources (the blessing resource is optional for some buildings and provided a production bonus). If a building is missing some resources it will show that icon in red. If an activated building has resources that are not being used, they will appear in green. If you click on one of your placed buildings you will see information about it's required and produced resources as well as the network of spaces it is connected to.
-
-Military: Between rounds, enemy buildings spawn and will require assigning military might to them to defeat them, otherwise they will continue to spread out and destroy nearby buildings. 
-
-End game: The game will end at the conclusion of your 10th round. In this prototype, you score points by activating as many castles as you can, with each active castle producing power points at the end of the round. 
-                    `,
-                    wrap: true,
-                    align: 'left'
-                    })).popup();
+                ModalView.a({ hints: { x: 0.2, y: 0.2, w: 0.6, h: 0.6 }, bgColor: 'rgba(75, 152, 203, 0.8)' })
+                    .c(ScrollView.a({scrollW: false, hints: {x:0, y:0, w:1, h:1}}).c(
+                        Label.a({
+                            text: gameDescription,
+                            richText: false,
+                            wrap: true,
+                            align: 'left',
+                            hints: {h:null},
+                            fontSize: '0.5',
+                        })
+                    )).popup();
             }
         });
+        this.addChild(this.undoButton);
         this.addChild(this.nextButton);
         this.addChild(this.instrButton);
     }
@@ -1966,6 +2267,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
             this.actionBar.hints = { x: 0, y: '1.0', w: '0.14wh', h: 0.84 };
             this.actionBar.orientation = 'vertical';
             this.nextButton.hints = { right: 0.99, bottom: 0.99, w: 0.1, h: '1.0' };
+            this.undoButton.hints = { right: 0.88, bottom: 0.99, w: 0.1, h: '1.0' };
             this.instrButton.hints = { x: 0.01, bottom: 0.99, w: 0.15, h: '1.0' };
         } else if (orienation === 'vertical') {
             this.board.hints = { center_x: 0.5, y: '2.0', w: 1, h: '1w' };
@@ -1977,7 +2279,8 @@ End game: The game will end at the conclusion of your 10th round. In this protot
             this.actionBar.hints = { x: 0, bottom: 1, w: 1, h: '2.0' };
             this.actionBar.orientation = 'horizontal';
             this.nextButton.hints = { right: 0.99, y: '1.0', w: 0.1, h: '1.0' };
-            this.instrButton.hints = { right: 0.99, y: '2.2', w: 0.15, h: '1.0' };
+            this.undoButton.hints = { right: 0.99, y: '2.2', w: 0.1, h: '1.0' };
+            this.instrButton.hints = { right: 0.99, y: '3.4', w: 0.15, h: '1.0' };
         }
     }
     finishTurn() {
@@ -2062,13 +2365,15 @@ End game: The game will end at the conclusion of your 10th round. In this protot
         }
         this.tileInfoPane.tile = tile;
         this.actionBar.selectedTile = null;
+        this.roundPlacements.push([tile, thex]);
+        this.undoButton.disable = false;
         if (advanceTurn) {
             this.clearPlacementTargets();
             // this.nextPlayer();
         }
         if (player.scoreMarker.tilesPlacedThisTurn >= 5) {
             this.actionBar.active = false;
-            this.statusLabel.text = 'End Turn'
+            this.statusLabel.text = 'End round'
         }
         return true;
     }
@@ -2174,7 +2479,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
             if (this.actionBar.active) this.actionBar.active = false;
             this.clearPlacementTargets();
             this.tileInfoPane.tile = null;
-            this.statusLabel.text = 'End turn';
+            this.statusLabel.text = 'End round';
         }
     }
 
@@ -2317,6 +2622,82 @@ End game: The game will end at the conclusion of your 10th round. In this protot
      * @param {TerrainHex|null} terrain 
      */
     displayTileNetworkInfo(player, terrain) {
+        if (terrain === null || terrain.tile === null) {
+            for (let t of player.placedTiles) t.showResourceStatus = true;
+            this.placementLayer.children = [];
+            return;
+        }
+        for (let t of player.placedTiles) t.showResourceStatus = false;
+
+        const edges = [];
+        const nodes = [];
+
+        const srcTerr = terrain;
+        const srcTile = terrain.tile;
+
+        // Edges touching hovered tile (PRIMARY)
+        if (srcTile) {
+            // incoming: producers → hovered consumer
+            for (const [res, arr] of srcTile.needsFilled) {
+                for (const prodTile of (arr ?? [])) {
+                    edges.push(NetworkFlowEdge.a({
+                        hints: { x: 0, y: 0, w: '1w', h: '1h' }, // cover the overlay layer
+                        board: this.board,
+                        fromHex: prodTile.hexPos,
+                        toHex: srcTerr.hexPos,
+                        resource: res,
+                        primary: true,
+                    }));
+                }
+            }
+            // outgoing: hovered producer → consumers
+            for (const [res, arr] of srcTile.productionFilled) {
+                for (const consTile of (arr ?? [])) {
+                    edges.push(NetworkFlowEdge.a({
+                        hints: { x: 0, y: 0, w: '1w', h: '1h' },
+                        board: this.board,
+                        fromHex: srcTerr.hexPos,
+                        toHex: consTile.hexPos,
+                        resource: res,
+                        primary: true,
+                    }));
+                }
+            }
+        }
+
+        // Node overlays (unchanged logic, trimmed for brevity)
+        for (let terr of this.board.connectedIter(terrain, player, new Set(), new Set())) {
+            let output = '', input = '';
+            if (false && terr.tile) {
+                if (terr !== terrain) {
+                    for (let n of srcTile.needsFilled.keys())
+                        if (srcTile.needsFilled.get(n)?.includes(terr.tile)) { input = n; break; }
+                    for (let n of srcTile.productionFilled.keys())
+                        if (srcTile.productionFilled.get(n)?.includes(terr.tile)) { output = n; break; }
+                } else {
+                    for (let n of srcTile.needsFilled.keys())
+                        if ((srcTile.needsFilled.get(n) ?? []).length < (srcTile.needs.get(n) ?? 0)) { input = n; break; }
+                    for (let n of srcTile.productionFilled.keys())
+                        if ((srcTile.productionFilled.get(n) ?? []).length < (srcTile.productionCapacity.get(n) ?? 0)) { output = n; break; }
+                }
+            }
+            const nto = NetworkTileOverlay.a({
+                w: this.board.hexSide, h: this.board.hexSide,
+                hexPos: terr.hexPos, input, output, primary: terr === terrain
+            });
+            nto.updateIO();
+            nodes.push(nto);
+        }
+
+        // Underlay edges, then icon overlays
+        this.placementLayer.children = [...nodes, ...edges];
+    }
+    /**
+     * 
+     * @param {Player} player 
+     * @param {TerrainHex|null} terrain 
+     */
+    displayTileNetworkInfo2(player, terrain) {
         if (terrain === null) {
             for (let t of player.placedTiles) {
                 t.showResourceStatus = true;
@@ -2371,7 +2752,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
                     }
                 }
             }
-            const nto = NetworkTileOverlay.a({w:this.board.hexSide, h:this.board.hexSide, hexPos:terr.hexPos, input, output, primary:terr === terrain})
+            const nto = NetworkTileOverlay.a({ w: this.board.hexSide, h: this.board.hexSide, hexPos: terr.hexPos, input, output, primary: terr === terrain })
             nto.updateIO();
             info.push(nto);
         }
@@ -2394,7 +2775,7 @@ End game: The game will end at the conclusion of your 10th round. In this protot
                 w: this.board.hexSide * 2,
                 h: this.board.hexSide * 2,
                 score: value,
-                hexPos: [thex.hexPos[0],thex.hexPos[1]],
+                hexPos: [thex.hexPos[0], thex.hexPos[1]],
             });
             let xy = this.board.pixelPos(thex.hexPos)
             tt.center_x = xy[0];
@@ -2486,10 +2867,10 @@ End game: The game will end at the conclusion of your 10th round. In this protot
 
         for (let p of playerSpec) {
             if (p.type === 0) { // human
-                this.players.push(Player.a({name: p.name, color: p.color, screen:this, showScore: true}));
+                this.players.push(Player.a({ name: p.name, color: p.color, screen: this, showScore: true }));
             }
             if (p.type === 1) { // enemy
-                this.players.push(EnemyPlayer.a({name: p.name, color: p.color, screen: this, showScore: false}));
+                this.players.push(EnemyPlayer.a({ name: p.name, color: p.color, screen: this, showScore: false }));
             }
         }
         this.setupLevel(level);
@@ -2542,13 +2923,15 @@ End game: The game will end at the conclusion of your 10th round. In this protot
     startPlayerTurn() {
         const p = this.players[this.activePlayer];
         this.updateResourceProduction();
+        this.roundPlacements = [];
+        this.undoButton.disable = true;
         if (p.localControl) {
             this.actionBar.active = true;
             if (p.scoreMarker.tilesPlacedThisTurn < 5) {
                 this.statusLabel.text = 'Select a building';
                 this.statusLabel.color = p.color;
             } else {
-                this.statusLabel.text = 'End turn';
+                this.statusLabel.text = 'End round';
                 this.statusLabel.color = p.color;
             }
         } else {
@@ -2582,6 +2965,22 @@ End game: The game will end at the conclusion of your 10th round. In this protot
         }
     }
 
+    undoLastTile() {
+        const last = this.roundPlacements.pop();
+        if (last !== undefined) {
+            const [tile, terr] = last;
+            this.removeTileFromTerrain(this.players[0], terr);
+            this.updateResourceProduction();
+            const p = this.players[this.activePlayer];
+            p.scoreMarker.tilesPlacedThisTurn--;
+        }
+        this.actionBar.selectedTile = null;
+        this.clearPlacementTargets();
+        this.tileInfoPane.tile = null;
+        this.statusLabel.text = 'Select a building';
+        if (this.roundPlacements.length === 0) this.undoButton.disable = true;
+    }
+
     drawNewTile() {
         let hexSide = this.board.hexSide;
         if (this.tileStack.length === 0) {
@@ -2612,11 +3011,13 @@ End game: The game will end at the conclusion of your 10th round. In this protot
         }
 
         for (let tt of /**@type {TargetTile[]}*/(this.placementLayer.children)) {
-            let hp = this.board.pixelPos(tt.hexPos);
-            tt.w = hexSide,
-                tt.h = hexSide,
-                tt.center_x = hp[0];
-            tt.center_y = hp[1];
+            if ('hexPos' in tt) {
+                let hp = this.board.pixelPos(tt.hexPos);
+                tt.w = hexSide,
+                    tt.h = hexSide,
+                    tt.center_x = hp[0];
+                tt.center_y = hp[1];
+            }
         }
 
         this.applyHints(this.tileInfoPane);
@@ -2633,6 +3034,9 @@ End game: The game will end at the conclusion of your 10th round. In this protot
 
         this.applyHints(this.nextButton);
         this.nextButton.layoutChildren();
+
+        this.applyHints(this.undoButton);
+        this.undoButton.layoutChildren();
 
         this.applyHints(this.instrButton);
         this.instrButton.layoutChildren();
@@ -2692,7 +3096,7 @@ class Player extends EventSink {
         this.localControl = true;
         /**@type {Tile[]} */
         this.placedTiles = [];
-        this.scoreMarker = PlayerScore.a({ident:this.name.substring(0, 2), color:this.color});
+        this.scoreMarker = PlayerScore.a({ ident: this.name.substring(0, 2), color: this.color });
     }
 
     on_showScore(event, object, value) {
