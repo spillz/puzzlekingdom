@@ -2978,7 +2978,10 @@ class GameScreen extends Widget {
         this.clearPlacementTargets();
         this.tileInfoPane.tile = null;
         this.statusLabel.text = 'Select a building';
-        if (this.roundPlacements.length === 0) this.undoButton.disable = true;
+        this.actionBar.active = true;
+        if (this.roundPlacements.length === 0) {
+            this.undoButton.disable = true;
+        }
     }
 
     drawNewTile() {
